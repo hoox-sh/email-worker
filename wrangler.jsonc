@@ -11,26 +11,26 @@
       "enabled": true,
       "head_sampling_rate": 1,
       "persist": true,
-      "invocation_logs": true,
-    },
+      "invocation_logs": true
+    }
   },
   "vars": {
     "TRADE_WORKER_NAME": "trade-worker",
-    "USE_IMAP": "false",
+    "USE_IMAP": "false"
   },
   "kv_namespaces": [
     {
       "binding": "CONFIG_KV",
-      "id": "c5917667a21745e390ff969f32b1847d",
-    },
+      "id": "c5917667a21745e390ff969f32b1847d"
+    }
   ],
   "services": [
     {
       "binding": "TRADE_SERVICE",
-      "service": "trade-worker",
-    },
+      "service": "trade-worker"
+    }
   ],
   "triggers": {
-    "crons": ["*/5 * * * *"],
-  },
+    "crons": ["*/5 * * * *"]
+  }
 }

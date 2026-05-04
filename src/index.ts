@@ -2,6 +2,8 @@
 
 import type { Fetcher } from "@cloudflare/workers-types";
 import type { KVNamespace } from "@cloudflare/workers-types";
+import { createErrorResponse, Errors } from '@hoox/shared/errors';
+import type { StandardResponse } from '@hoox/shared/types';
 
 interface Env {
   CONFIG_KV?: KVNamespace;
@@ -66,13 +68,13 @@ async function handleMailgunWebhook(
   const token = request.headers.get("Mailgun-Token");
 
   if (!signature || !timestamp || !token) {
-    return new Response("Missing Mailgun signature headers", { status: 401 });
+    return Errors.unauthorized("Missing Mailgun signature headers");
   }
 
   const apiKey = env.MAILGUN_API_KEY;
   if (!apiKey) {
     console.error("MAILGUN_API_KEY not configured");
-    return new Response("Service configuration error", { status: 500 });
+    return Errors.internal("Service configuration error");
   }
 
   const dataToSign = timestamp + token;
@@ -95,7 +97,7 @@ async function handleMailgunWebhook(
 
   if (signature !== expectedSignature) {
     console.warn("Invalid Mailgun signature");
-    return new Response("Invalid signature", { status: 401 });
+    return Errors.unauthorized("Invalid signature");
   }
 
   try {

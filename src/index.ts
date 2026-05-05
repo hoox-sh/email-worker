@@ -13,6 +13,7 @@ interface Env {
   INTERNAL_KEY_BINDING?: string;
   MAILGUN_API_KEY?: string;
   TRADE_SERVICE: Fetcher;
+  ANALYTICS_SERVICE?: Fetcher;
   EMAIL_SCAN_SUBJECT?: string;
   USE_IMAP?: string;
 }
@@ -27,6 +28,26 @@ interface EmailSignal {
 }
 
 const DEFAULT_SCAN_SUBJECT = "Trading Signal";
+
+// Analytics tracking helper
+async function trackAnalytics(
+  env: Env,
+  endpoint: string,
+  body: Record<string, any>
+): Promise<void> {
+  if (!env.ANALYTICS_SERVICE) return;
+  try {
+    await env.ANALYTICS_SERVICE.fetch(
+      new Request("http://analytics-service" + endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }) as any
+    );
+  } catch (e) {
+    console.error("Analytics tracking failed:", e);
+  }
+}
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -191,12 +212,33 @@ async function processEmail(
     );
 
     if (!response.ok) {
+      // Track failed signal forwarding (non-blocking)
+      trackAnalytics(env, "/track/signal", {
+        data: {
+          source: "email-worker",
+          type: signal.action,
+          symbol: signal.symbol,
+          confidence: 0.5,
+        },
+      });
+
       return new Response(`Trade worker error: ${response.status}`, {
         status: 500,
       });
     }
 
     const result = (await response.json()) as { requestId?: string };
+
+    // Track successful signal forwarding (non-blocking)
+    trackAnalytics(env, "/track/signal", {
+      data: {
+        source: "email-worker",
+        type: signal.action,
+        symbol: signal.symbol,
+        confidence: 0.5,
+      },
+    });
+
     return new Response(
       JSON.stringify({ success: true, requestId: result.requestId }),
       {

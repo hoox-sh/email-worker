@@ -38,7 +38,7 @@ async function trackAnalytics(
   if (!env.ANALYTICS_SERVICE) return;
   try {
     await env.ANALYTICS_SERVICE.fetch(
-      new Request("http://analytics-service" + endpoint, {
+      new Request("http://localhost" + endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -75,7 +75,8 @@ export default {
 
   async scheduled(env: Env): Promise<void> {
     if (env.USE_IMAP === "true") {
-      await handleIMAPScan(env);
+      console.log("[IMAP] IMAP scanning not supported in Cloudflare Workers");
+      // IMAP requires Node.js APIs not available in edge runtime
     }
   },
 };
@@ -196,20 +197,31 @@ async function processEmail(
 
   console.log(`[${source}] Signal: ${JSON.stringify(signal)}`);
 
-  try {
-    const internalKey = env.INTERNAL_KEY_BINDING;
-    const response = await env.TRADE_SERVICE.fetch(
-      "https://trade-worker.internal/webhook",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Internal-Key": internalKey || "",
-          "X-Source": "email-worker",
-        },
-        body: JSON.stringify(signal),
+    try {
+      const internalKey = env.INTERNAL_KEY_BINDING;
+      
+      if (!internalKey) {
+        console.error("INTERNAL_KEY_BINDING not configured");
+        return new Response("Internal authentication not configured", { status: 500 });
       }
-    );
+      
+      if (!env.TRADE_SERVICE) {
+        console.error("TRADE_SERVICE binding not configured");
+        return new Response("Trade service not configured", { status: 500 });
+      }
+
+      const response = await env.TRADE_SERVICE.fetch(
+        "https://trade-worker.internal/webhook",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Internal-Key": internalKey || "",
+            "X-Source": "email-worker",
+          },
+          body: JSON.stringify(signal),
+        }
+      );
 
     if (!response.ok) {
       // Track failed signal forwarding (non-blocking)

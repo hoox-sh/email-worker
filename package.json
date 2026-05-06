@@ -11,8 +11,9 @@
     "test:coverage": "bun test --coverage"
   },
   "dependencies": {
-    "imap-simple": "^4.3.0",
-    "imap": "^0.8.19"
+    "@hoox/shared": "workspace:*",
+    "imap": "^0.8.19",
+    "imap-simple": "^4.3.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260420.1",

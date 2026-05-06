@@ -4,8 +4,10 @@ import type { Fetcher } from "@cloudflare/workers-types";
 import type { KVNamespace } from "@cloudflare/workers-types";
 import { createErrorResponse, Errors } from '@hoox/shared/errors';
 import type { StandardResponse } from '@hoox/shared/types';
+import { trackAnalytics } from '@hoox/shared/analytics';
+import type { AnalyticsEnv } from '@hoox/shared/analytics';
 
-interface Env {
+interface Env extends AnalyticsEnv {
   CONFIG_KV?: KVNamespace;
   EMAIL_HOST_BINDING?: string;
   EMAIL_USER_BINDING?: string;
@@ -13,7 +15,6 @@ interface Env {
   INTERNAL_KEY_BINDING?: string;
   MAILGUN_API_KEY?: string;
   TRADE_SERVICE: Fetcher;
-  ANALYTICS_SERVICE?: Fetcher;
   EMAIL_SCAN_SUBJECT?: string;
   USE_IMAP?: string;
 }
@@ -28,26 +29,6 @@ interface EmailSignal {
 }
 
 const DEFAULT_SCAN_SUBJECT = "Trading Signal";
-
-// Analytics tracking helper
-async function trackAnalytics(
-  env: Env,
-  endpoint: string,
-  body: Record<string, any>
-): Promise<void> {
-  if (!env.ANALYTICS_SERVICE) return;
-  try {
-    await env.ANALYTICS_SERVICE.fetch(
-      new Request("http://localhost" + endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      }) as any
-    );
-  } catch (e) {
-    console.error("Analytics tracking failed:", e);
-  }
-}
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {

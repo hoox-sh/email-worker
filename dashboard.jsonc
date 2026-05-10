@@ -13,6 +13,9 @@
         "poll_interval_minutes": 5,
         "mark_as_read": false,
       },
+      "options": {
+        "poll_interval_minutes": [1, 5, 10, 15, 30, 60]
+      },
       "descriptions": {
         "use_imap": "Enable active IMAP polling instead of relying solely on mail webhooks.",
         "scan_subject": "Email subject line to scan for trade signals.",
@@ -29,6 +32,9 @@
         "coin_pattern": "BTC|ETH|SOL",
         "action_pattern": "BUY|SELL|LONG|SHORT",
         "quantity_multiplier": 1,
+      },
+      "options": {
+        "quantity_multiplier": [0.5, 0.75, 1, 1.25, 1.5, 2]
       },
       "descriptions": {
         "coin_pattern": "Regex pattern to identify which assets are eligible for trading from email signals.",

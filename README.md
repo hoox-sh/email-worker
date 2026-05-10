@@ -45,6 +45,7 @@ This worker is part of the **[Hoox Trading System](https://github.com/jango-bloc
 ## Setup
 
 1. **Install dependencies:**
+
    ```bash
    bun install
    ```
@@ -59,6 +60,7 @@ This worker is part of the **[Hoox Trading System](https://github.com/jango-bloc
    - `IMAP_PORT`: IMAP server port (usually 993 for SSL)
 
 4. **Update `wrangler.jsonc` with necessary bindings:**
+
    ```jsonc
    {
      "name": "email-worker",
@@ -71,8 +73,8 @@ This worker is part of the **[Hoox Trading System](https://github.com/jango-bloc
        "IMAP_USER",
        "IMAP_PASSWORD",
        "IMAP_HOST",
-       "IMAP_PORT"
-     ]
+       "IMAP_PORT",
+     ],
    }
    ```
 
@@ -90,11 +92,13 @@ This worker is part of the **[Hoox Trading System](https://github.com/jango-bloc
 ## Development
 
 Run locally:
+
 ```bash
 bun run dev
 ```
 
 Deploy:
+
 ```bash
 bun run deploy
 ```
@@ -110,6 +114,7 @@ bun run deploy
 - **Content-Type:** `application/json`
 
 **Payload Structure:**
+
 ```json
 {
   "from": "exchange@example.com",
@@ -121,6 +126,7 @@ bun run deploy
 ### Internal Request (email-worker -> hoox gateway)
 
 Forwards parsed signals to the `hoox` gateway for execution:
+
 ```json
 {
   "target": "trade",
@@ -137,15 +143,16 @@ Forwards parsed signals to the `hoox` gateway for execution:
 
 ### Supported Email Providers
 
-| Provider | IMAP Host | Port | Notes |
-|-----------|------------|------|-------|
-| Gmail | `imap.gmail.com` | 993 | Requires app password |
-| Outlook | `outlook.office365.com` | 993 | Modern auth required |
-| Yahoo | `imap.mail.yahoo.com` | 993 | App password recommended |
+| Provider | IMAP Host               | Port | Notes                    |
+| -------- | ----------------------- | ---- | ------------------------ |
+| Gmail    | `imap.gmail.com`        | 993  | Requires app password    |
+| Outlook  | `outlook.office365.com` | 993  | Modern auth required     |
+| Yahoo    | `imap.mail.yahoo.com`   | 993  | App password recommended |
 
 ### Signal Parsing Rules
 
 The worker looks for these patterns in email content:
+
 - **Symbol**: `BTCUSDT`, `ETHUSD`, etc.
 - **Action**: `BUY`, `SELL`, `LONG`, `SHORT`
 - **Quantity**: Numeric value
@@ -162,4 +169,4 @@ The worker looks for these patterns in email content:
 
 ---
 
-*Cloudflare® and the Cloudflare logo are trademarks and/or registered trademarks of Cloudflare, Inc. in the United States and other jurisdictions.*
+_Cloudflare® and the Cloudflare logo are trademarks and/or registered trademarks of Cloudflare, Inc. in the United States and other jurisdictions._

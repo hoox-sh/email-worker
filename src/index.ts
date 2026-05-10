@@ -2,10 +2,15 @@
 
 import type { Fetcher } from "@cloudflare/workers-types";
 import type { KVNamespace } from "@cloudflare/workers-types";
-import { createErrorResponse, Errors } from '@hoox/shared/errors';
-import type { StandardResponse } from '@hoox/shared/types';
-import { trackAnalytics } from '@hoox/shared/analytics';
-import type { AnalyticsEnv } from '@hoox/shared/analytics';
+import {
+  createErrorResponse,
+  Errors,
+} from "@jango-blockchained/hoox-shared/errors";
+import type { StandardResponse } from "@jango-blockchained/hoox-shared/types";
+import { trackAnalytics } from "@jango-blockchained/hoox-shared/analytics";
+import type { AnalyticsEnv } from "@jango-blockchained/hoox-shared/analytics";
+import { healthCheck } from "@jango-blockchained/hoox-shared/health";
+import { KVKeys } from "@jango-blockchained/hoox-shared/kvKeys";
 
 interface Env extends AnalyticsEnv {
   CONFIG_KV?: KVNamespace;
@@ -32,6 +37,13 @@ const DEFAULT_SCAN_SUBJECT = "Trading Signal";
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    const url = new URL(request.url);
+
+    // Health endpoint
+    if (request.method === "GET" && url.pathname === "/health") {
+      return healthCheck({ worker: "email-worker" });
+    }
+
     const contentType = request.headers.get("content-type") || "";
     const userAgent = request.headers.get("user-agent") || "";
 
@@ -134,7 +146,7 @@ async function handleIMAPScan(env: Env): Promise<Response> {
       env.EMAIL_HOST_BINDING,
       env.EMAIL_USER_BINDING,
       env.EMAIL_PASS_BINDING,
-      env.CONFIG_KV?.get("email:scan_subject") ||
+      env.CONFIG_KV?.get(KVKeys.KV_EMAIL_SCAN_SUBJECT) ||
         Promise.resolve(DEFAULT_SCAN_SUBJECT),
     ]);
 
@@ -142,7 +154,7 @@ async function handleIMAPScan(env: Env): Promise<Response> {
       return new Response("Error: Missing IMAP credentials", { status: 500 });
     }
 
-    const useImap = await env.CONFIG_KV?.get("email:use_imap");
+    const useImap = await env.CONFIG_KV?.get(KVKeys.KV_EMAIL_USE_IMAP);
     if (useImap === "false") {
       console.log("[IMAP] IMAP polling disabled via KV config");
       return new Response("IMAP polling disabled", { status: 200 });
@@ -178,31 +190,33 @@ async function processEmail(
 
   console.log(`[${source}] Signal: ${JSON.stringify(signal)}`);
 
-    try {
-      const internalKey = env.INTERNAL_KEY_BINDING;
-      
-      if (!internalKey) {
-        console.error("INTERNAL_KEY_BINDING not configured");
-        return new Response("Internal authentication not configured", { status: 500 });
-      }
-      
-      if (!env.TRADE_SERVICE) {
-        console.error("TRADE_SERVICE binding not configured");
-        return new Response("Trade service not configured", { status: 500 });
-      }
+  try {
+    const internalKey = env.INTERNAL_KEY_BINDING;
 
-      const response = await env.TRADE_SERVICE.fetch(
-        "https://trade-worker.internal/webhook",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Internal-Key": internalKey || "",
-            "X-Source": "email-worker",
-          },
-          body: JSON.stringify(signal),
-        }
-      );
+    if (!internalKey) {
+      console.error("INTERNAL_KEY_BINDING not configured");
+      return new Response("Internal authentication not configured", {
+        status: 500,
+      });
+    }
+
+    if (!env.TRADE_SERVICE) {
+      console.error("TRADE_SERVICE binding not configured");
+      return new Response("Trade service not configured", { status: 500 });
+    }
+
+    const response = await env.TRADE_SERVICE.fetch(
+      "https://trade-worker.internal/webhook",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Internal-Key": internalKey || "",
+          "X-Source": "email-worker",
+        },
+        body: JSON.stringify(signal),
+      }
+    );
 
     if (!response.ok) {
       // Track failed signal forwarding (non-blocking)
@@ -251,11 +265,13 @@ interface SignalPatterns {
 
 async function loadSignalPatterns(env: Env): Promise<SignalPatterns> {
   const [coinPattern, actionPattern, quantityMultiplier] = await Promise.all([
-    env.CONFIG_KV?.get("email:coin_pattern").then((v) => v || "BTC|ETH|SOL"),
-    env.CONFIG_KV?.get("email:action_pattern").then(
-      (v) => v || "BUY|SELL|LONG|SHORT"
+    env.CONFIG_KV?.get(KVKeys.KV_EMAIL_COIN_PATTERN).then(
+      (v) => v || "BTC|ETH|SOL"
     ),
-    env.CONFIG_KV?.get("email:quantity_multiplier").then((v) =>
+    env.CONFIG_KV?.get(KVKeys.KV_EMAIL_ACTION_PATTERN).then(
+      (v) => v || "buy|sell|long|short"
+    ),
+    env.CONFIG_KV?.get(KVKeys.KV_EMAIL_QUANTITY_MULTIPLIER).then((v) =>
       v ? parseFloat(v) : 1
     ),
   ]);

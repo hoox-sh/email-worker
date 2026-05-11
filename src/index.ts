@@ -2,11 +2,8 @@
 
 import type { Fetcher } from "@cloudflare/workers-types";
 import type { KVNamespace } from "@cloudflare/workers-types";
-import {
-  createErrorResponse,
-  Errors,
-} from "@jango-blockchained/hoox-shared/errors";
-import type { StandardResponse } from "@jango-blockchained/hoox-shared/types";
+import { Errors } from "@jango-blockchained/hoox-shared/errors";
+
 import { trackAnalytics } from "@jango-blockchained/hoox-shared/analytics";
 import type { AnalyticsEnv } from "@jango-blockchained/hoox-shared/analytics";
 import { healthCheck } from "@jango-blockchained/hoox-shared/health";

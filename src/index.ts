@@ -2,7 +2,7 @@
 
 import type { Fetcher } from "@cloudflare/workers-types";
 import type { KVNamespace } from "@cloudflare/workers-types";
-import { Errors } from "@jango-blockchained/hoox-shared/errors";
+import { Errors, toError } from "@jango-blockchained/hoox-shared/errors";
 
 import { trackAnalytics } from "@jango-blockchained/hoox-shared/analytics";
 import type { AnalyticsEnv } from "@jango-blockchained/hoox-shared/analytics";
@@ -120,7 +120,7 @@ async function handleMailgunWebhook(
       formData.get("stripped-text")?.toString() ||
       "";
     return await processEmail(subject, body, "mailgun", env);
-  } catch (error) {
+  } catch (error: unknown) {
     return errorResponse(error);
   }
 }
@@ -132,7 +132,7 @@ async function handleDirectJson(request: Request, env: Env): Promise<Response> {
     const body =
       json.text?.toString() || json.body?.toString() || JSON.stringify(json);
     return await processEmail(subject, body, "json", env);
-  } catch (error) {
+  } catch (error: unknown) {
     return errorResponse(error);
   }
 }
@@ -161,7 +161,7 @@ async function handleIMAPScan(env: Env): Promise<Response> {
     throw new Error(
       "IMAP scanning requires the 'imap' package which is not available in Cloudflare Workers. Use Mailgun webhook or direct JSON instead."
     );
-  } catch (error) {
+  } catch (error: unknown) {
     return errorResponse(error);
   }
 }
@@ -249,7 +249,7 @@ async function processEmail(
         headers: { "Content-Type": "application/json" },
       }
     );
-  } catch (error) {
+  } catch (error: unknown) {
     return errorResponse(error);
   }
 }
@@ -364,7 +364,7 @@ function normalizeAction(value: string): string {
 
 function errorResponse(error: unknown): Response {
   return new Response(
-    `Error: ${error instanceof Error ? error.message : String(error)}`,
+    `Error: ${toError(error)}`,
     {
       status: 500,
       headers: { "Content-Type": "application/json" },

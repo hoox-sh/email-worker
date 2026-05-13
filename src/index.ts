@@ -1,25 +1,18 @@
 // email-worker/src/index.ts - Scans email inbox and forwards signals to trade-worker
 
-import type { Fetcher } from "@cloudflare/workers-types";
+import type { ExecutionContext, Fetcher } from "@cloudflare/workers-types";
 import type { KVNamespace } from "@cloudflare/workers-types";
 import { Errors, toError } from "@jango-blockchained/hoox-shared/errors";
+import { createLogger } from "@jango-blockchained/hoox-shared/middleware";
 
 import { trackAnalytics } from "@jango-blockchained/hoox-shared/analytics";
 import type { AnalyticsEnv } from "@jango-blockchained/hoox-shared/analytics";
 import { healthCheck } from "@jango-blockchained/hoox-shared/health";
 import { KVKeys } from "@jango-blockchained/hoox-shared/kvKeys";
 
-interface Env extends AnalyticsEnv {
-  CONFIG_KV?: KVNamespace;
-  EMAIL_HOST_BINDING?: string;
-  EMAIL_USER_BINDING?: string;
-  EMAIL_PASS_BINDING?: string;
-  INTERNAL_KEY_BINDING?: string;
-  MAILGUN_API_KEY?: string;
-  TRADE_SERVICE: Fetcher;
-  EMAIL_SCAN_SUBJECT?: string;
-  USE_IMAP?: string;
-}
+const logger = createLogger({ service: "email-worker" });
+
+interface Env extends Cloudflare.Env, AnalyticsEnv {}
 
 interface EmailSignal {
   exchange: string;
@@ -33,7 +26,7 @@ interface EmailSignal {
 const DEFAULT_SCAN_SUBJECT = "Trading Signal";
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
     // Health endpoint
@@ -48,11 +41,11 @@ export default {
       userAgent.includes("Mailgun") ||
       contentType.includes("application/x-www-form-urlencoded")
     ) {
-      return await handleMailgunWebhook(request, env);
+      return await handleMailgunWebhook(request, env, ctx);
     }
 
     if (contentType.includes("application/json")) {
-      return await handleDirectJson(request, env);
+      return await handleDirectJson(request, env, ctx);
     }
 
     return new Response(
@@ -63,9 +56,9 @@ export default {
     );
   },
 
-  async scheduled(env: Env): Promise<void> {
+  async scheduled(env: Env, ctx: ExecutionContext): Promise<void> {
     if (env.USE_IMAP === "true") {
-      console.log("[IMAP] IMAP scanning not supported in Cloudflare Workers");
+      logger.info("[IMAP] IMAP scanning not supported in Cloudflare Workers");
       // IMAP requires Node.js APIs not available in edge runtime
     }
   },
@@ -73,7 +66,8 @@ export default {
 
 async function handleMailgunWebhook(
   request: Request,
-  env: Env
+  env: Env,
+  ctx: ExecutionContext
 ): Promise<Response> {
   const signature = request.headers.get("Mailgun-Signature");
   const timestamp = request.headers.get("Mailgun-Timestamp");
@@ -85,7 +79,7 @@ async function handleMailgunWebhook(
 
   const apiKey = env.MAILGUN_API_KEY;
   if (!apiKey) {
-    console.error("MAILGUN_API_KEY not configured");
+    logger.error("MAILGUN_API_KEY not configured");
     return Errors.internal("Service configuration error");
   }
 
@@ -108,7 +102,7 @@ async function handleMailgunWebhook(
     .join("");
 
   if (signature !== expectedSignature) {
-    console.warn("Invalid Mailgun signature");
+    logger.warn("Invalid Mailgun signature");
     return Errors.unauthorized("Invalid signature");
   }
 
@@ -119,19 +113,19 @@ async function handleMailgunWebhook(
       formData.get("body-plain")?.toString() ||
       formData.get("stripped-text")?.toString() ||
       "";
-    return await processEmail(subject, body, "mailgun", env);
+    return await processEmail(subject, body, "mailgun", env, ctx);
   } catch (error: unknown) {
     return errorResponse(error);
   }
 }
 
-async function handleDirectJson(request: Request, env: Env): Promise<Response> {
+async function handleDirectJson(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   try {
     const json = (await request.json()) as Record<string, unknown>;
     const subject = json.subject?.toString() || "";
     const body =
       json.text?.toString() || json.body?.toString() || JSON.stringify(json);
-    return await processEmail(subject, body, "json", env);
+    return await processEmail(subject, body, "json", env, ctx);
   } catch (error: unknown) {
     return errorResponse(error);
   }
@@ -153,11 +147,11 @@ async function handleIMAPScan(env: Env): Promise<Response> {
 
     const useImap = await env.CONFIG_KV?.get(KVKeys.KV_EMAIL_USE_IMAP);
     if (useImap === "false") {
-      console.log("[IMAP] IMAP polling disabled via KV config");
+      logger.info("[IMAP] IMAP polling disabled via KV config");
       return new Response("IMAP polling disabled", { status: 200 });
     }
 
-    console.log(`[IMAP] Scanning ${user}@${host} for: ${scanSubject}`);
+    logger.info("[IMAP] Scanning mailbox", { user, host, subject: scanSubject });
     throw new Error(
       "IMAP scanning requires the 'imap' package which is not available in Cloudflare Workers. Use Mailgun webhook or direct JSON instead."
     );
@@ -170,7 +164,8 @@ async function processEmail(
   subject: string,
   body: string,
   source: string,
-  env: Env
+  env: Env,
+  ctx: ExecutionContext
 ): Promise<Response> {
   const signalPatterns = await loadSignalPatterns(env);
   const signal = parseEmailSignal(body, signalPatterns);
@@ -185,20 +180,20 @@ async function processEmail(
     );
   }
 
-  console.log(`[${source}] Signal: ${JSON.stringify(signal)}`);
+  logger.info("Email signal parsed", { source, signal });
 
   try {
     const internalKey = env.INTERNAL_KEY_BINDING;
 
     if (!internalKey) {
-      console.error("INTERNAL_KEY_BINDING not configured");
+      logger.error("INTERNAL_KEY_BINDING not configured");
       return new Response("Internal authentication not configured", {
         status: 500,
       });
     }
 
     if (!env.TRADE_SERVICE) {
-      console.error("TRADE_SERVICE binding not configured");
+      logger.error("TRADE_SERVICE binding not configured");
       return new Response("Trade service not configured", { status: 500 });
     }
 
@@ -208,7 +203,7 @@ async function processEmail(
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Internal-Key": internalKey || "",
+          "X-Internal-Auth-Key": internalKey,
           "X-Source": "email-worker",
         },
         body: JSON.stringify(signal),
@@ -217,14 +212,14 @@ async function processEmail(
 
     if (!response.ok) {
       // Track failed signal forwarding (non-blocking)
-      trackAnalytics(env, "/track/signal", {
+      ctx.waitUntil(trackAnalytics(env, "/track/signal", {
         data: {
           source: "email-worker",
           type: signal.action,
           symbol: signal.symbol,
           confidence: 0.5,
         },
-      });
+      }));
 
       return new Response(`Trade worker error: ${response.status}`, {
         status: 500,
@@ -234,14 +229,14 @@ async function processEmail(
     const result = (await response.json()) as { requestId?: string };
 
     // Track successful signal forwarding (non-blocking)
-    trackAnalytics(env, "/track/signal", {
+    ctx.waitUntil(trackAnalytics(env, "/track/signal", {
       data: {
         source: "email-worker",
         type: signal.action,
         symbol: signal.symbol,
         confidence: 0.5,
       },
-    });
+    }));
 
     return new Response(
       JSON.stringify({ success: true, requestId: result.requestId }),

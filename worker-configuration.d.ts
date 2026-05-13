@@ -9,6 +9,12 @@ declare namespace Cloudflare {
     CONFIG_KV: KVNamespace;
     TRADE_WORKER_NAME: "trade-worker";
     USE_IMAP: "false";
+    INTERNAL_KEY_BINDING: string;
+    EMAIL_HOST_BINDING: string;
+    EMAIL_USER_BINDING: string;
+    EMAIL_PASS_BINDING: string;
+    MAILGUN_API_KEY: string;
+    EMAIL_SCAN_SUBJECT: string;
     TRADE_SERVICE: Fetcher /* trade-worker */;
   }
 }

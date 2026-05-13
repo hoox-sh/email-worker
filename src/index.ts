@@ -26,7 +26,11 @@ interface EmailSignal {
 const DEFAULT_SCAN_SUBJECT = "Trading Signal";
 
 export default {
-  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  async fetch(
+    request: Request,
+    env: Env,
+    ctx: ExecutionContext
+  ): Promise<Response> {
     const url = new URL(request.url);
 
     // Health endpoint
@@ -119,7 +123,11 @@ async function handleMailgunWebhook(
   }
 }
 
-async function handleDirectJson(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+async function handleDirectJson(
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext
+): Promise<Response> {
   try {
     const json = (await request.json()) as Record<string, unknown>;
     const subject = json.subject?.toString() || "";
@@ -151,7 +159,11 @@ async function handleIMAPScan(env: Env): Promise<Response> {
       return new Response("IMAP polling disabled", { status: 200 });
     }
 
-    logger.info("[IMAP] Scanning mailbox", { user, host, subject: scanSubject });
+    logger.info("[IMAP] Scanning mailbox", {
+      user,
+      host,
+      subject: scanSubject,
+    });
     throw new Error(
       "IMAP scanning requires the 'imap' package which is not available in Cloudflare Workers. Use Mailgun webhook or direct JSON instead."
     );
@@ -212,14 +224,16 @@ async function processEmail(
 
     if (!response.ok) {
       // Track failed signal forwarding (non-blocking)
-      ctx.waitUntil(trackAnalytics(env, "/track/signal", {
-        data: {
-          source: "email-worker",
-          type: signal.action,
-          symbol: signal.symbol,
-          confidence: 0.5,
-        },
-      }));
+      ctx.waitUntil(
+        trackAnalytics(env, "/track/signal", {
+          data: {
+            source: "email-worker",
+            type: signal.action,
+            symbol: signal.symbol,
+            confidence: 0.5,
+          },
+        })
+      );
 
       return new Response(`Trade worker error: ${response.status}`, {
         status: 500,
@@ -229,14 +243,16 @@ async function processEmail(
     const result = (await response.json()) as { requestId?: string };
 
     // Track successful signal forwarding (non-blocking)
-    ctx.waitUntil(trackAnalytics(env, "/track/signal", {
-      data: {
-        source: "email-worker",
-        type: signal.action,
-        symbol: signal.symbol,
-        confidence: 0.5,
-      },
-    }));
+    ctx.waitUntil(
+      trackAnalytics(env, "/track/signal", {
+        data: {
+          source: "email-worker",
+          type: signal.action,
+          symbol: signal.symbol,
+          confidence: 0.5,
+        },
+      })
+    );
 
     return new Response(
       JSON.stringify({ success: true, requestId: result.requestId }),
@@ -358,11 +374,8 @@ function normalizeAction(value: string): string {
 }
 
 function errorResponse(error: unknown): Response {
-  return new Response(
-    `Error: ${toError(error)}`,
-    {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    }
-  );
+  return new Response(JSON.stringify({ error: toError(error) }), {
+    status: 500,
+    headers: { "Content-Type": "application/json" },
+  });
 }

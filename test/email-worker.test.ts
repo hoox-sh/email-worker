@@ -49,7 +49,12 @@ describe("email-worker", () => {
     const req = new Request("https://email-worker.workers.dev");
     const res = await worker.fetch(
       req as any,
-      { ...mockEnvBase, TRADE_SERVICE: {} as any } as any
+      { ...mockEnvBase, TRADE_SERVICE: {} as any } as any,
+      {
+        waitUntil: async (p: Promise<any>) => {
+          await p;
+        },
+      } as any
     );
     expect(res.status).toBe(200);
     expect(await res.text()).toContain("Email Worker Ready");
@@ -83,6 +88,11 @@ describe("email-worker", () => {
       {
         ...mockEnvBase,
         TRADE_SERVICE: { fetch: mockFetch } as any,
+      } as any,
+      {
+        waitUntil: async (p: Promise<any>) => {
+          await p;
+        },
       } as any
     );
     const body = (await res.json()) as any;
@@ -102,7 +112,12 @@ describe("email-worker", () => {
 
     const res = await worker.fetch(
       req as any,
-      { ...mockEnvBase, TRADE_SERVICE: {} as any } as any
+      { ...mockEnvBase, TRADE_SERVICE: {} as any } as any,
+      {
+        waitUntil: async (p: Promise<any>) => {
+          await p;
+        },
+      } as any
     );
 
     expect(res.status).toBe(400);
@@ -154,6 +169,11 @@ describe("email-worker", () => {
       {
         ...mockEnvBase,
         TRADE_SERVICE: { fetch: mockFetch } as any,
+      } as any,
+      {
+        waitUntil: async (p: Promise<any>) => {
+          await p;
+        },
       } as any
     );
     const body = (await res.json()) as any;
@@ -207,6 +227,11 @@ describe("email-worker", () => {
       {
         ...mockEnvBase,
         TRADE_SERVICE: { fetch: mockFetch } as any,
+      } as any,
+      {
+        waitUntil: async (p: Promise<any>) => {
+          await p;
+        },
       } as any
     );
 
@@ -238,6 +263,11 @@ describe("email-worker", () => {
       {
         ...mockEnvBase,
         TRADE_SERVICE: { fetch: mockFetch } as any,
+      } as any,
+      {
+        waitUntil: async (p: Promise<any>) => {
+          await p;
+        },
       } as any
     );
 
@@ -254,7 +284,12 @@ describe("email-worker", () => {
 
     const res = await worker.fetch(
       req as any,
-      { ...mockEnvBase, TRADE_SERVICE: {} as any } as any
+      { ...mockEnvBase, TRADE_SERVICE: {} as any } as any,
+      {
+        waitUntil: async (p: Promise<any>) => {
+          await p;
+        },
+      } as any
     );
 
     expect(res.status).toBe(500);
@@ -282,6 +317,11 @@ describe("email-worker", () => {
       {
         ...mockEnvBase,
         TRADE_SERVICE: { fetch: mockFetch } as any,
+      } as any,
+      {
+        waitUntil: async (p: Promise<any>) => {
+          await p;
+        },
       } as any
     );
 
@@ -310,6 +350,11 @@ describe("email-worker", () => {
       {
         ...mockEnvBase,
         TRADE_SERVICE: { fetch: mockFetch } as any,
+      } as any,
+      {
+        waitUntil: async (p: Promise<any>) => {
+          await p;
+        },
       } as any
     );
 
@@ -344,6 +389,11 @@ describe("email-worker", () => {
       {
         ...mockEnvBase,
         TRADE_SERVICE: { fetch: mockFetch } as any,
+      } as any,
+      {
+        waitUntil: async (p: Promise<any>) => {
+          await p;
+        },
       } as any
     );
 
@@ -372,7 +422,12 @@ describe("Mailgun signature validation", () => {
 
     const res = await worker.fetch(
       req as any,
-      { ...mockEnvBase, TRADE_SERVICE: {} as any } as any
+      { ...mockEnvBase, TRADE_SERVICE: {} as any } as any,
+      {
+        waitUntil: async (p: Promise<any>) => {
+          await p;
+        },
+      } as any
     );
     expect(res.status).toBe(401);
   });
@@ -400,7 +455,12 @@ describe("Mailgun signature validation", () => {
 
     const res = await worker.fetch(
       req as any,
-      { ...mockEnvBase, TRADE_SERVICE: {} as any } as any
+      { ...mockEnvBase, TRADE_SERVICE: {} as any } as any,
+      {
+        waitUntil: async (p: Promise<any>) => {
+          await p;
+        },
+      } as any
     );
     expect(res.status).toBe(401);
   });
@@ -437,7 +497,12 @@ describe("Mailgun signature validation", () => {
     const envWithoutKey = { ...mockEnvBase, MAILGUN_API_KEY: undefined };
     const res = await worker.fetch(
       req as any,
-      { ...envWithoutKey, TRADE_SERVICE: {} as any } as any
+      { ...envWithoutKey, TRADE_SERVICE: {} as any } as any,
+      {
+        waitUntil: async (p: Promise<any>) => {
+          await p;
+        },
+      } as any
     );
     expect(res.status).toBe(500);
   });

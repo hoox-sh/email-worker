@@ -2,13 +2,15 @@
 
 import type { ExecutionContext, Fetcher } from "@cloudflare/workers-types";
 import type { KVNamespace } from "@cloudflare/workers-types";
-import { Errors, toError } from "@jango-blockchained/hoox-shared/errors";
-import { createLogger } from "@jango-blockchained/hoox-shared/middleware";
+import { Errors, toError, createJsonResponse } from "@jango-blockchained/hoox-shared/errors";
+import { createLogger, withRequestLog, requireInternalAuth } from "@jango-blockchained/hoox-shared/middleware";
+import { createRouter } from "@jango-blockchained/hoox-shared/router";
 
 import { trackAnalytics } from "@jango-blockchained/hoox-shared/analytics";
 import type { AnalyticsEnv } from "@jango-blockchained/hoox-shared/analytics";
 import { healthCheck } from "@jango-blockchained/hoox-shared/health";
 import { KVKeys } from "@jango-blockchained/hoox-shared/kvKeys";
+import { serviceFetch } from "@jango-blockchained/hoox-shared/service-bindings";
 
 const logger = createLogger({ service: "email-worker" });
 
@@ -25,40 +27,27 @@ interface EmailSignal {
 
 const DEFAULT_SCAN_SUBJECT = "Trading Signal";
 
+const router = createRouter<Env>();
+
+router.get("/health", async (request, env, ctx) => {
+  return healthCheck({ worker: "email-worker" });
+});
+
+router.post("/webhook", async (request, env, ctx) => {
+  return await handleMailgunWebhook(request, env, ctx);
+});
+
+router.post("/email-signal", async (request, env, ctx) => {
+  return await handleDirectJson(request, env, ctx);
+});
+
 export default {
-  async fetch(
-    request: Request,
-    env: Env,
-    ctx: ExecutionContext
-  ): Promise<Response> {
-    const url = new URL(request.url);
-
-    // Health endpoint
-    if (request.method === "GET" && url.pathname === "/health") {
-      return healthCheck({ worker: "email-worker" });
-    }
-
-    const contentType = request.headers.get("content-type") || "";
-    const userAgent = request.headers.get("user-agent") || "";
-
-    if (
-      userAgent.includes("Mailgun") ||
-      contentType.includes("application/x-www-form-urlencoded")
-    ) {
-      return await handleMailgunWebhook(request, env, ctx);
-    }
-
-    if (contentType.includes("application/json")) {
-      return await handleDirectJson(request, env, ctx);
-    }
-
-    return new Response(
-      "Email Worker Ready. POST email data or use webhooks.",
-      {
-        headers: { "Content-Type": "text/plain" },
-      }
-    );
-  },
+  fetch: withRequestLog(
+    (request: Request, env: Env, ctx: ExecutionContext) => {
+      return router.handle(request, env, ctx);
+    },
+    { service: "email-worker", module: "router" }
+  ),
 
   async scheduled(env: Env, ctx: ExecutionContext): Promise<void> {
     if (env.USE_IMAP === "true") {
@@ -119,7 +108,7 @@ async function handleMailgunWebhook(
       "";
     return await processEmail(subject, body, "mailgun", env, ctx);
   } catch (error: unknown) {
-    return errorResponse(error);
+    return Errors.internal(error);
   }
 }
 
@@ -128,6 +117,10 @@ async function handleDirectJson(
   env: Env,
   ctx: ExecutionContext
 ): Promise<Response> {
+  // Internal authentication check
+  const authError = requireInternalAuth(request, env, "EMAIL_INTERNAL_KEY");
+  if (authError) return authError;
+
   try {
     const json = (await request.json()) as Record<string, unknown>;
     const subject = json.subject?.toString() || "";
@@ -135,7 +128,7 @@ async function handleDirectJson(
       json.text?.toString() || json.body?.toString() || JSON.stringify(json);
     return await processEmail(subject, body, "json", env, ctx);
   } catch (error: unknown) {
-    return errorResponse(error);
+    return Errors.internal(error);
   }
 }
 
@@ -150,7 +143,7 @@ async function handleIMAPScan(env: Env): Promise<Response> {
     ]);
 
     if (!host || !user || !pass) {
-      return new Response("Error: Missing IMAP credentials", { status: 500 });
+      return Errors.internal("Missing IMAP credentials");
     }
 
     const useImap = await env.CONFIG_KV?.get(KVKeys.KV_EMAIL_USE_IMAP);
@@ -168,7 +161,7 @@ async function handleIMAPScan(env: Env): Promise<Response> {
       "IMAP scanning requires the 'imap' package which is not available in Cloudflare Workers. Use Mailgun webhook or direct JSON instead."
     );
   } catch (error: unknown) {
-    return errorResponse(error);
+    return Errors.internal(error);
   }
 }
 
@@ -183,13 +176,7 @@ async function processEmail(
   const signal = parseEmailSignal(body, signalPatterns);
 
   if (!signal) {
-    return new Response(
-      JSON.stringify({ success: false, error: "No valid signal in email" }),
-      {
-        status: 400,
-        headers: { "Content-Type": "application/json" },
-      }
-    );
+    return Errors.badRequest("No valid signal in email");
   }
 
   logger.info("Email signal parsed", { source, signal });
@@ -199,28 +186,20 @@ async function processEmail(
 
     if (!internalKey) {
       logger.error("INTERNAL_KEY_BINDING not configured");
-      return new Response("Internal authentication not configured", {
-        status: 500,
-      });
+      return Errors.internal("Internal authentication not configured");
     }
 
     if (!env.TRADE_SERVICE) {
       logger.error("TRADE_SERVICE binding not configured");
-      return new Response("Trade service not configured", { status: 500 });
+      return Errors.internal("Trade service not configured");
     }
 
-    const response = await env.TRADE_SERVICE.fetch(
-      "https://trade-worker.internal/webhook",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Internal-Auth-Key": internalKey,
-          "X-Source": "email-worker",
-        },
-        body: JSON.stringify(signal),
-      }
-    );
+    const response = await serviceFetch(env.TRADE_SERVICE, "/webhook", signal, {
+      headers: {
+        "X-Internal-Auth-Key": internalKey,
+        "X-Source": "email-worker",
+      },
+    });
 
     if (!response.ok) {
       // Track failed signal forwarding (non-blocking)
@@ -235,9 +214,7 @@ async function processEmail(
         })
       );
 
-      return new Response(`Trade worker error: ${response.status}`, {
-        status: 500,
-      });
+      return Errors.internal(`Trade worker error: ${response.status}`);
     }
 
     const result = (await response.json()) as { requestId?: string };
@@ -261,7 +238,7 @@ async function processEmail(
       }
     );
   } catch (error: unknown) {
-    return errorResponse(error);
+    return Errors.internal(error);
   }
 }
 
@@ -373,9 +350,4 @@ function normalizeAction(value: string): string {
   return v;
 }
 
-function errorResponse(error: unknown): Response {
-  return new Response(JSON.stringify({ error: toError(error) }), {
-    status: 500,
-    headers: { "Content-Type": "application/json" },
-  });
-}
+

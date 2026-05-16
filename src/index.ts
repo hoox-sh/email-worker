@@ -2,8 +2,16 @@
 
 import type { ExecutionContext, Fetcher } from "@cloudflare/workers-types";
 import type { KVNamespace } from "@cloudflare/workers-types";
-import { Errors, toError, createJsonResponse } from "@jango-blockchained/hoox-shared/errors";
-import { createLogger, withRequestLog, requireInternalAuth } from "@jango-blockchained/hoox-shared/middleware";
+import {
+  Errors,
+  toError,
+  createJsonResponse,
+} from "@jango-blockchained/hoox-shared/errors";
+import {
+  createLogger,
+  withRequestLog,
+  requireInternalAuth,
+} from "@jango-blockchained/hoox-shared/middleware";
 import { createRouter } from "@jango-blockchained/hoox-shared/router";
 
 import { trackAnalytics } from "@jango-blockchained/hoox-shared/analytics";
@@ -118,7 +126,7 @@ async function handleDirectJson(
   ctx: ExecutionContext
 ): Promise<Response> {
   // Internal authentication check
-  const authError = requireInternalAuth(request, env, "EMAIL_INTERNAL_KEY");
+  const authError = requireInternalAuth(request, env, "INTERNAL_KEY_BINDING");
   if (authError) return authError;
 
   try {
@@ -349,5 +357,3 @@ function normalizeAction(value: string): string {
   if (v.includes("sell") || v.includes("short")) return "sell";
   return v;
 }
-
-

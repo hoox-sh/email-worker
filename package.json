@@ -11,9 +11,7 @@
     "test:coverage": "bun test --coverage"
   },
   "dependencies": {
-    "@jango-blockchained/hoox-shared": "workspace:*",
-    "imap": "^0.8.19",
-    "imap-simple": "^4.3.0"
+    "@jango-blockchained/hoox-shared": "workspace:*"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260420.1",

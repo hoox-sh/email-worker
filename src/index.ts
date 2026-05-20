@@ -1,12 +1,7 @@
 // email-worker/src/index.ts - Scans email inbox and forwards signals to trade-worker
 
-import type { ExecutionContext, Fetcher } from "@cloudflare/workers-types";
-import type { KVNamespace } from "@cloudflare/workers-types";
-import {
-  Errors,
-  toError,
-  createJsonResponse,
-} from "@jango-blockchained/hoox-shared/errors";
+import type { ExecutionContext } from "@cloudflare/workers-types";
+import { Errors } from "@jango-blockchained/hoox-shared/errors";
 import {
   createLogger,
   withRequestLog,
@@ -33,8 +28,6 @@ interface EmailSignal {
   leverage?: number;
 }
 
-const DEFAULT_SCAN_SUBJECT = "Trading Signal";
-
 const router = createRouter<Env>();
 
 router.get("/health", async (request, env, ctx) => {
@@ -58,10 +51,10 @@ export default {
   ),
 
   async scheduled(env: Env, ctx: ExecutionContext): Promise<void> {
-    if (env.USE_IMAP === "true") {
-      logger.info("[IMAP] IMAP scanning not supported in Cloudflare Workers");
-      // IMAP requires Node.js APIs not available in edge runtime
-    }
+    logger.info(
+      "[SCHEDULED] Email scanning disabled — IMAP requires Node.js and is not available in Workers edge runtime"
+    );
+    // Use Mailgun webhook or direct JSON POST instead
   },
 };
 
@@ -109,12 +102,11 @@ async function handleMailgunWebhook(
 
   try {
     const formData = await request.formData();
-    const subject = formData.get("subject")?.toString() || "";
     const body =
       formData.get("body-plain")?.toString() ||
       formData.get("stripped-text")?.toString() ||
       "";
-    return await processEmail(subject, body, "mailgun", env, ctx);
+    return await processEmail(body, "mailgun", env, ctx);
   } catch (error: unknown) {
     return Errors.internal(error);
   }
@@ -131,50 +123,15 @@ async function handleDirectJson(
 
   try {
     const json = (await request.json()) as Record<string, unknown>;
-    const subject = json.subject?.toString() || "";
     const body =
       json.text?.toString() || json.body?.toString() || JSON.stringify(json);
-    return await processEmail(subject, body, "json", env, ctx);
-  } catch (error: unknown) {
-    return Errors.internal(error);
-  }
-}
-
-async function handleIMAPScan(env: Env): Promise<Response> {
-  try {
-    const [host, user, pass, scanSubject] = await Promise.all([
-      env.EMAIL_HOST_BINDING,
-      env.EMAIL_USER_BINDING,
-      env.EMAIL_PASS_BINDING,
-      env.CONFIG_KV?.get(KVKeys.KV_EMAIL_SCAN_SUBJECT) ||
-        Promise.resolve(DEFAULT_SCAN_SUBJECT),
-    ]);
-
-    if (!host || !user || !pass) {
-      return Errors.internal("Missing IMAP credentials");
-    }
-
-    const useImap = await env.CONFIG_KV?.get(KVKeys.KV_EMAIL_USE_IMAP);
-    if (useImap === "false") {
-      logger.info("[IMAP] IMAP polling disabled via KV config");
-      return new Response("IMAP polling disabled", { status: 200 });
-    }
-
-    logger.info("[IMAP] Scanning mailbox", {
-      user,
-      host,
-      subject: scanSubject,
-    });
-    throw new Error(
-      "IMAP scanning requires the 'imap' package which is not available in Cloudflare Workers. Use Mailgun webhook or direct JSON instead."
-    );
+    return await processEmail(body, "json", env, ctx);
   } catch (error: unknown) {
     return Errors.internal(error);
   }
 }
 
 async function processEmail(
-  subject: string,
   body: string,
   source: string,
   env: Env,

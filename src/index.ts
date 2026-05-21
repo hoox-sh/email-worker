@@ -1,11 +1,15 @@
 // email-worker/src/index.ts - Scans email inbox and forwards signals to trade-worker
 
 import type { ExecutionContext } from "@cloudflare/workers-types";
-import { Errors } from "@jango-blockchained/hoox-shared/errors";
+import {
+  Errors,
+  createJsonResponse,
+} from "@jango-blockchained/hoox-shared/errors";
 import {
   createLogger,
   withRequestLog,
   requireInternalAuth,
+  createInternalAuthMiddleware,
 } from "@jango-blockchained/hoox-shared/middleware";
 import { createRouter } from "@jango-blockchained/hoox-shared/router";
 
@@ -17,7 +21,9 @@ import { serviceFetch } from "@jango-blockchained/hoox-shared/service-bindings";
 
 const logger = createLogger({ service: "email-worker" });
 
-interface Env extends Cloudflare.Env, AnalyticsEnv {}
+export interface Env extends Cloudflare.Env, AnalyticsEnv {
+  [key: string]: unknown;
+}
 
 interface EmailSignal {
   exchange: string;
@@ -29,6 +35,7 @@ interface EmailSignal {
 }
 
 const router = createRouter<Env>();
+const requireAuth = createInternalAuthMiddleware();
 
 router.get("/health", async (request, env, ctx) => {
   return healthCheck({ worker: "email-worker" });
@@ -38,9 +45,13 @@ router.post("/webhook", async (request, env, ctx) => {
   return await handleMailgunWebhook(request, env, ctx);
 });
 
-router.post("/email-signal", async (request, env, ctx) => {
-  return await handleDirectJson(request, env, ctx);
-});
+router.post(
+  "/email-signal",
+  async (request, env, ctx) => {
+    return await handleDirectJson(request, env, ctx);
+  },
+  [requireAuth]
+);
 
 export default {
   fetch: withRequestLog(
@@ -117,10 +128,6 @@ async function handleDirectJson(
   env: Env,
   ctx: ExecutionContext
 ): Promise<Response> {
-  // Internal authentication check
-  const authError = requireInternalAuth(request, env, "INTERNAL_KEY_BINDING");
-  if (authError) return authError;
-
   try {
     const json = (await request.json()) as Record<string, unknown>;
     const body =
@@ -196,11 +203,9 @@ async function processEmail(
       })
     );
 
-    return new Response(
-      JSON.stringify({ success: true, requestId: result.requestId }),
-      {
-        headers: { "Content-Type": "application/json" },
-      }
+    return createJsonResponse(
+      { success: true, requestId: result.requestId },
+      200
     );
   } catch (error: unknown) {
     return Errors.internal(error);

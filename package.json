@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Worker that scans email inbox and forwards signals to trade-worker",
   "main": "src/index.ts",
+  "type": "module",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
@@ -14,8 +15,8 @@
     "@jango-blockchained/hoox-shared": "workspace:*"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260420.1",
-    "bun-types": "^1.3.13",
-    "wrangler": "^4.83.0"
+    "@cloudflare/workers-types": "^4.20260516.1",
+    "bun-types": "^1.3.14",
+    "wrangler": "^4.93.1"
   }
 }

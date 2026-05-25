@@ -44,9 +44,9 @@ const mockEnvBase = {
 };
 
 describe("email-worker", () => {
-  test("GET returns ready message", async () => {
+  test("GET /health returns healthy", async () => {
     const worker = (await import("../src/index.ts")).default;
-    const req = new Request("https://email-worker.workers.dev");
+    const req = new Request("https://email-worker.workers.dev/health");
     const res = await worker.fetch(
       req as any,
       { ...mockEnvBase, TRADE_SERVICE: {} as any } as any,
@@ -57,7 +57,9 @@ describe("email-worker", () => {
       } as any
     );
     expect(res.status).toBe(200);
-    expect(await res.text()).toContain("Email Worker Ready");
+    const json = (await res.json()) as any;
+    expect(json.success).toBe(true);
+    expect(json.result.service).toBe("email-worker");
   });
 
   test("POST json with valid signal forwards to trade service", async () => {
@@ -68,9 +70,12 @@ describe("email-worker", () => {
       );
 
     const worker = (await import("../src/index.ts")).default;
-    const req = new Request("https://email-worker.workers.dev", {
+    const req = new Request("https://email-worker.workers.dev/email-signal", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Auth-Key": "internal-key-123",
+      },
       body: JSON.stringify({
         subject: "Buy Bitcoin",
         text: JSON.stringify({
@@ -104,9 +109,12 @@ describe("email-worker", () => {
 
   test("POST json with missing signal returns 400", async () => {
     const worker = (await import("../src/index.ts")).default;
-    const req = new Request("https://email-worker.workers.dev", {
+    const req = new Request("https://email-worker.workers.dev/email-signal", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Auth-Key": "internal-key-123",
+      },
       body: JSON.stringify({ subject: "No signal here" }),
     });
 
@@ -152,7 +160,7 @@ describe("email-worker", () => {
       })
     );
 
-    const req = new Request("https://email-worker.workers.dev", {
+    const req = new Request("https://email-worker.workers.dev/webhook", {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -210,7 +218,7 @@ describe("email-worker", () => {
       })
     );
 
-    const req = new Request("https://email-worker.workers.dev", {
+    const req = new Request("https://email-worker.workers.dev/webhook", {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -245,15 +253,20 @@ describe("email-worker", () => {
       .mockResolvedValue(new Response("Error", { status: 500 }));
 
     const worker = (await import("../src/index.ts")).default;
-    const req = new Request("https://email-worker.workers.dev", {
+    const req = new Request("https://email-worker.workers.dev/email-signal", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Auth-Key": "internal-key-123",
+      },
       body: JSON.stringify({
         subject: "Signal",
         text: JSON.stringify({
           exchange: "binance",
           action: "buy",
-          symbol: "BTC",
+          symbol: "BTCUSDT",
+          quantity: 0.1,
+          leverage: 10,
         }),
       }),
     });
@@ -276,9 +289,12 @@ describe("email-worker", () => {
 
   test("returns 500 on parse error", async () => {
     const worker = (await import("../src/index.ts")).default;
-    const req = new Request("https://email-worker.workers.dev", {
+    const req = new Request("https://email-worker.workers.dev/email-signal", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Auth-Key": "internal-key-123",
+      },
       body: "invalid{json",
     });
 
@@ -299,9 +315,12 @@ describe("email-worker", () => {
     const mockFetch = jest.fn().mockRejectedValue(new Error("Network error"));
 
     const worker = (await import("../src/index.ts")).default;
-    const req = new Request("https://email-worker.workers.dev", {
+    const req = new Request("https://email-worker.workers.dev/email-signal", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Auth-Key": "internal-key-123",
+      },
       body: JSON.stringify({
         subject: "Signal",
         text: JSON.stringify({
@@ -336,9 +355,12 @@ describe("email-worker", () => {
       );
 
     const worker = (await import("../src/index.ts")).default;
-    const req = new Request("https://email-worker.workers.dev", {
+    const req = new Request("https://email-worker.workers.dev/email-signal", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Auth-Key": "internal-key-123",
+      },
       body: JSON.stringify({
         subject: "Signal",
         text: "exchange: binance\naction: buy\nsymbol: BTCUSDT\nquantity: 0.5",
@@ -371,9 +393,12 @@ describe("email-worker", () => {
       );
 
     const worker = (await import("../src/index.ts")).default;
-    const req = new Request("https://email-worker.workers.dev", {
+    const req = new Request("https://email-worker.workers.dev/email-signal", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Auth-Key": "internal-key-123",
+      },
       body: JSON.stringify({
         subject: "Signal",
         text: JSON.stringify({
@@ -411,7 +436,7 @@ describe("Mailgun signature validation", () => {
       JSON.stringify({ exchange: "binance", action: "buy", symbol: "BTC" })
     );
 
-    const req = new Request("https://email-worker.workers.dev", {
+    const req = new Request("https://email-worker.workers.dev/webhook", {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -441,7 +466,7 @@ describe("Mailgun signature validation", () => {
       JSON.stringify({ exchange: "binance", action: "buy", symbol: "BTC" })
     );
 
-    const req = new Request("https://email-worker.workers.dev", {
+    const req = new Request("https://email-worker.workers.dev/webhook", {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -482,7 +507,7 @@ describe("Mailgun signature validation", () => {
       JSON.stringify({ exchange: "binance", action: "buy", symbol: "BTC" })
     );
 
-    const req = new Request("https://email-worker.workers.dev", {
+    const req = new Request("https://email-worker.workers.dev/webhook", {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",

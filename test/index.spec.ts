@@ -26,13 +26,22 @@ async function generateMailgunSignature(
 }
 
 describe("Email Worker fetch handler", () => {
-  test("should handle standard GET request with default text response", async () => {
-    const req = new Request("http://localhost");
+  // Helper to create mock ExecutionContext
+  const mockCtx = {
+    waitUntil: vi.fn((p: Promise<any>) => {
+      p?.catch?.(() => {});
+    }),
+    passThroughOnException: vi.fn(),
+  } as any;
+
+  test("should handle GET /health request", async () => {
+    const req = new Request("http://localhost/health");
     const mockEnv = {} as any;
-    const res = await worker.fetch(req, mockEnv);
+    const res = await worker.fetch(req, mockEnv, mockCtx);
     expect(res.status).toBe(200);
-    const text = await res.text();
-    expect(text).toContain("Email Worker Ready");
+    const json = (await res.json()) as any;
+    expect(json.success).toBe(true);
+    expect(json.result.service).toBe("email-worker");
   });
 
   test("should handle Mailgun webhook payload", async () => {
@@ -45,37 +54,42 @@ describe("Email Worker fetch handler", () => {
       TEST_KEY
     );
 
-    const params = new URLSearchParams();
-    params.append("subject", "Trade");
-    params.append(
+    // Use FormData for proper multipart parsing compatibility
+    const formData = new FormData();
+    formData.append("subject", "Trade");
+    formData.append(
       "body-plain",
       '{"exchange":"mexc","action":"long","symbol":"BTC_USDT"}'
     );
 
-    const req = new Request("http://localhost", {
+    const req = new Request("http://localhost/webhook", {
       method: "POST",
       headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
         "User-Agent": "Mailgun",
         "Mailgun-Signature": signature,
         "Mailgun-Timestamp": timestamp,
         "Mailgun-Token": token,
       },
-      body: params.toString(),
+      body: formData,
     });
 
     const mockEnv = {
       INTERNAL_KEY_BINDING: "test-key",
       MAILGUN_API_KEY: TEST_KEY,
+      CONFIG_KV: {
+        get: vi.fn().mockResolvedValue(null),
+        put: vi.fn().mockResolvedValue(undefined),
+      },
       TRADE_SERVICE: {
-        fetch: vi.fn().mockResolvedValue({
-          ok: true,
-          json: async () => ({ requestId: "123" }),
-        }),
+        fetch: vi
+          .fn()
+          .mockResolvedValue(
+            new Response(JSON.stringify({ requestId: "123" }), { status: 200 })
+          ),
       },
     } as any;
 
-    const res = await worker.fetch(req, mockEnv);
+    const res = await worker.fetch(req, mockEnv, mockCtx);
     expect(res.status).toBe(200);
     const json = (await res.json()) as any;
     expect(json.success).toBe(true);
@@ -93,25 +107,29 @@ describe("Email Worker fetch handler", () => {
       TEST_KEY
     );
 
-    const params = new URLSearchParams();
-    params.append("subject", "Hello");
-    params.append("body-plain", "Just saying hi");
+    const formData = new FormData();
+    formData.append("subject", "Hello");
+    formData.append("body-plain", "Just saying hi");
 
-    const req = new Request("http://localhost", {
+    const req = new Request("http://localhost/webhook", {
       method: "POST",
       headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
         "Mailgun-Signature": signature,
         "Mailgun-Timestamp": timestamp,
         "Mailgun-Token": token,
       },
-      body: params.toString(),
+      body: formData,
     });
 
     const mockEnv = {
       MAILGUN_API_KEY: TEST_KEY,
+      CONFIG_KV: {
+        get: vi.fn().mockResolvedValue(null),
+        put: vi.fn().mockResolvedValue(undefined),
+      },
     } as any;
-    const res = await worker.fetch(req, mockEnv);
+    const res = await worker.fetch(req, mockEnv, mockCtx);
+    // "Just saying hi" doesn't contain a valid signal → bad request
     expect(res.status).toBe(400);
   });
 
@@ -121,23 +139,31 @@ describe("Email Worker fetch handler", () => {
       body: '{"exchange":"binance","action":"buy","symbol":"ETH_USDT"}',
     };
 
-    const req = new Request("http://localhost", {
+    const req = new Request("http://localhost/email-signal", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Auth-Key": "test-key",
+      },
       body: JSON.stringify(payload),
     });
 
     const mockEnv = {
       INTERNAL_KEY_BINDING: "test-key",
+      CONFIG_KV: {
+        get: vi.fn().mockResolvedValue(null),
+        put: vi.fn().mockResolvedValue(undefined),
+      },
       TRADE_SERVICE: {
-        fetch: vi.fn().mockResolvedValue({
-          ok: true,
-          json: async () => ({ requestId: "456" }),
-        }),
+        fetch: vi
+          .fn()
+          .mockResolvedValue(
+            new Response(JSON.stringify({ requestId: "456" }), { status: 200 })
+          ),
       },
     } as any;
 
-    const res = await worker.fetch(req, mockEnv);
+    const res = await worker.fetch(req, mockEnv, mockCtx);
     expect(res.status).toBe(200);
   });
 
@@ -147,14 +173,21 @@ describe("Email Worker fetch handler", () => {
       body: '{"exchange":"binance","action":"buy","symbol":"ETH_USDT"}',
     };
 
-    const req = new Request("http://localhost", {
+    const req = new Request("http://localhost/email-signal", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Auth-Key": "test-key",
+      },
       body: JSON.stringify(payload),
     });
 
     const mockEnv = {
       INTERNAL_KEY_BINDING: "test-key",
+      CONFIG_KV: {
+        get: vi.fn().mockResolvedValue(null),
+        put: vi.fn().mockResolvedValue(undefined),
+      },
       TRADE_SERVICE: {
         fetch: vi.fn().mockResolvedValue({
           ok: false,
@@ -163,7 +196,7 @@ describe("Email Worker fetch handler", () => {
       },
     } as any;
 
-    const res = await worker.fetch(req, mockEnv);
+    const res = await worker.fetch(req, mockEnv, mockCtx);
     expect(res.status).toBe(500);
   });
 });

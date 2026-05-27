@@ -1,6 +1,5 @@
 // email-worker/src/index.ts - Scans email inbox and forwards signals to trade-worker
 
-import type { ExecutionContext } from "@cloudflare/workers-types";
 import {
   Errors,
   createJsonResponse,
@@ -8,7 +7,6 @@ import {
 import {
   createLogger,
   withRequestLog,
-  requireInternalAuth,
   createInternalAuthMiddleware,
 } from "@jango-blockchained/hoox-shared/middleware";
 import { createRouter } from "@jango-blockchained/hoox-shared/router";
@@ -37,7 +35,7 @@ interface EmailSignal {
 const router = createRouter<Env>();
 const requireAuth = createInternalAuthMiddleware();
 
-router.get("/health", async (request, env, ctx) => {
+router.get("/health", async (_request, _env, _ctx) => {
   return healthCheck({ worker: "email-worker" });
 });
 
@@ -61,7 +59,7 @@ export default {
     { service: "email-worker", module: "router" }
   ),
 
-  async scheduled(env: Env, ctx: ExecutionContext): Promise<void> {
+  async scheduled(_env: Env, _ctx: ExecutionContext): Promise<void> {
     logger.info(
       "[SCHEDULED] Email scanning disabled — IMAP requires Node.js and is not available in Workers edge runtime"
     );
@@ -254,7 +252,9 @@ function parseEmailSignal(
         leverage: data.leverage ? Number(data.leverage) : undefined,
       };
     }
-  } catch {}
+  } catch {
+    // Not JSON — fall through to plaintext parsing
+  }
   return extractFromPlaintext(body, patterns);
 }
 

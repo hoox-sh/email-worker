@@ -19,9 +19,7 @@ import { serviceFetch } from "@jango-blockchained/hoox-shared/service-bindings";
 
 const logger = createLogger({ service: "email-worker" });
 
-export interface Env extends Cloudflare.Env, AnalyticsEnv {
-  [key: string]: unknown;
-}
+export interface Env extends Cloudflare.Env, AnalyticsEnv {}
 
 interface EmailSignal {
   exchange: string;

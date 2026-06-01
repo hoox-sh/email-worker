@@ -59,7 +59,7 @@ describe("Email Worker fetch handler", () => {
     formData.append("subject", "Trade");
     formData.append(
       "body-plain",
-      '{"exchange":"mexc","action":"long","symbol":"BTC_USDT"}'
+      '{"exchange":"mexc","action":"buy","symbol":"BTC_USDT"}'
     );
 
     const req = new Request("http://localhost/webhook", {

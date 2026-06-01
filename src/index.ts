@@ -8,6 +8,7 @@ import {
   createLogger,
   withRequestLog,
   createInternalAuthMiddleware,
+  validateJson,
 } from "@jango-blockchained/hoox-shared/middleware";
 import { createRouter } from "@jango-blockchained/hoox-shared/router";
 
@@ -16,6 +17,7 @@ import type { AnalyticsEnv } from "@jango-blockchained/hoox-shared/analytics";
 import { healthCheck } from "@jango-blockchained/hoox-shared/health";
 import { KVKeys } from "@jango-blockchained/hoox-shared/kvKeys";
 import { serviceFetch } from "@jango-blockchained/hoox-shared/service-bindings";
+import { z } from "zod";
 
 const logger = createLogger({ service: "email-worker" });
 
@@ -31,6 +33,31 @@ interface EmailSignal {
   price?: number;
   leverage?: number;
 }
+
+// ── Zod validation schemas ──────────────────────────────────────────
+
+const EmailSignalSchema = z
+  .object({
+    exchange: z.string(),
+    action: z.enum(["buy", "sell"]),
+    symbol: z.string(),
+    quantity: z.number().default(100),
+    price: z.number().optional(),
+    leverage: z.number().optional(),
+  })
+  .strip();
+
+const WebhookPayloadSchema = z.object({
+  subject: z.string().optional(),
+  text: z.string().optional(),
+  body: z.string().optional(),
+});
+
+// ── Constants ───────────────────────────────────────────────────────
+
+const KNOWN_EXCHANGES = ["binance", "mexc", "bybit"] as const;
+
+// ── Router setup ────────────────────────────────────────────────────
 
 const router = createRouter<Env>();
 const requireAuth = createInternalAuthMiddleware();
@@ -66,6 +93,8 @@ export default {
     // Use Mailgun webhook or direct JSON POST instead
   },
 };
+
+// ── Handlers ────────────────────────────────────────────────────────
 
 async function handleMailgunWebhook(
   request: Request,
@@ -127,14 +156,20 @@ async function handleDirectJson(
   ctx: ExecutionContext
 ): Promise<Response> {
   try {
-    const json = (await request.json()) as Record<string, unknown>;
-    const body =
-      json.text?.toString() || json.body?.toString() || JSON.stringify(json);
-    return await processEmail(body, "json", env, ctx);
+    const json = await request.json();
+    const parsed = validateJson(WebhookPayloadSchema, json);
+    if (!parsed.ok) {
+      return Errors.badRequest(parsed.error);
+    }
+    const { text, body } = parsed.value;
+    const emailBody = text || body || JSON.stringify(parsed.value);
+    return await processEmail(emailBody, "json", env, ctx);
   } catch (error: unknown) {
     return Errors.internal(error);
   }
 }
+
+// ── Signal processing ───────────────────────────────────────────────
 
 async function processEmail(
   body: string,
@@ -149,7 +184,15 @@ async function processEmail(
     return Errors.badRequest("No valid signal in email");
   }
 
-  logger.info("Email signal parsed", { source, signal });
+  return processSignal(signal, env, ctx);
+}
+
+async function processSignal(
+  signal: EmailSignal,
+  env: Env,
+  ctx: ExecutionContext
+): Promise<Response> {
+  logger.info("Email signal processed", { signal });
 
   try {
     const internalKey = env.INTERNAL_KEY_BINDING;
@@ -210,6 +253,8 @@ async function processEmail(
   }
 }
 
+// ── Signal parsing ──────────────────────────────────────────────────
+
 interface SignalPatterns {
   coinPattern: RegExp;
   actionPattern: RegExp;
@@ -242,14 +287,18 @@ function parseEmailSignal(
 ): EmailSignal | null {
   try {
     const data = JSON.parse(body);
-    if (data.exchange && data.action && data.symbol) {
+    const parsed = validateJson(EmailSignalSchema, data);
+    if (parsed.ok) {
+      const signal = parsed.value;
+      const normalizedExchange = normalizeExchange(signal.exchange);
+      if (!normalizedExchange) return null;
       return {
-        exchange: String(data.exchange).toLowerCase(),
-        action: normalizeAction(String(data.action)),
-        symbol: String(data.symbol).toUpperCase(),
-        quantity: (Number(data.quantity) || 100) * patterns.quantityMultiplier,
-        price: data.price ? Number(data.price) : undefined,
-        leverage: data.leverage ? Number(data.leverage) : undefined,
+        exchange: normalizedExchange,
+        action: signal.action,
+        symbol: signal.symbol.toUpperCase(),
+        quantity: signal.quantity * patterns.quantityMultiplier,
+        price: signal.price,
+        leverage: signal.leverage,
       };
     }
   } catch {
@@ -280,9 +329,10 @@ function extractFromPlaintext(
     ? normalizeAction(actionMatch[0])
     : extractField(lower, ["action", "buy", "sell", "long", "short"]);
 
-  if (exchange && action && symbol) {
+  const normalizedExchange = exchange ? normalizeExchange(exchange) : null;
+  if (normalizedExchange && action && symbol) {
     return {
-      exchange: normalizeExchange(exchange),
+      exchange: normalizedExchange,
       action: normalizeAction(action),
       symbol: symbol.toUpperCase().replace(/[^A-Z0-9]/g, ""),
       quantity: 100 * patterns.quantityMultiplier,
@@ -305,12 +355,12 @@ function extractField(body: string, keywords: string[]): string | null {
   return null;
 }
 
-function normalizeExchange(value: string): string {
+function normalizeExchange(value: string): string | null {
   const v = value.toLowerCase();
   if (v.includes("binance")) return "binance";
   if (v.includes("mexc")) return "mexc";
   if (v.includes("bybit")) return "bybit";
-  return v;
+  return null;
 }
 
 function normalizeAction(value: string): string {

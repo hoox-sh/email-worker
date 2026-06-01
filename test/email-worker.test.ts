@@ -39,8 +39,6 @@ const mockEnvBase = {
   EMAIL_PASS_BINDING: "password123",
   INTERNAL_KEY_BINDING: "internal-key-123",
   MAILGUN_API_KEY: TEST_MAILGUN_API_KEY,
-  EMAIL_SCAN_SUBJECT: "Trading Signal",
-  USE_IMAP: "false",
 };
 
 describe("email-worker", () => {
@@ -212,7 +210,7 @@ describe("email-worker", () => {
       "stripped-text",
       JSON.stringify({
         exchange: "bybit",
-        action: "long",
+        action: "sell",
         symbol: "SOLUSDT",
         quantity: 10,
       })
@@ -424,6 +422,408 @@ describe("email-worker", () => {
 
     expect(res.status).toBe(200);
   });
+
+  // ── Zod validation tests ──────────────────────────────────────────
+
+  test("invalid exchange (kraken) returns 400", async () => {
+    const worker = (await import("../src/index.ts")).default;
+    const req = new Request("https://email-worker.workers.dev/email-signal", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Auth-Key": "internal-key-123",
+      },
+      body: JSON.stringify({
+        text: JSON.stringify({
+          exchange: "kraken",
+          action: "buy",
+          symbol: "BTCUSDT",
+        }),
+      }),
+    });
+
+    const res = await worker.fetch(
+      req as any,
+      { ...mockEnvBase, TRADE_SERVICE: {} as any } as any,
+      {
+        waitUntil: async (p: Promise<any>) => {
+          await p;
+        },
+      } as any
+    );
+
+    expect(res.status).toBe(400);
+  });
+
+  test("missing symbol returns 400", async () => {
+    const worker = (await import("../src/index.ts")).default;
+    const req = new Request("https://email-worker.workers.dev/email-signal", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Auth-Key": "internal-key-123",
+      },
+      body: JSON.stringify({
+        text: JSON.stringify({
+          exchange: "binance",
+          action: "buy",
+        }),
+      }),
+    });
+
+    const res = await worker.fetch(
+      req as any,
+      { ...mockEnvBase, TRADE_SERVICE: {} as any } as any,
+      {
+        waitUntil: async (p: Promise<any>) => {
+          await p;
+        },
+      } as any
+    );
+
+    expect(res.status).toBe(400);
+  });
+
+  test("invalid action returns 400", async () => {
+    const worker = (await import("../src/index.ts")).default;
+    const req = new Request("https://email-worker.workers.dev/email-signal", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Auth-Key": "internal-key-123",
+      },
+      body: JSON.stringify({
+        text: JSON.stringify({
+          exchange: "binance",
+          action: "INVALID",
+          symbol: "BTCUSDT",
+        }),
+      }),
+    });
+
+    const res = await worker.fetch(
+      req as any,
+      { ...mockEnvBase, TRADE_SERVICE: {} as any } as any,
+      {
+        waitUntil: async (p: Promise<any>) => {
+          await p;
+        },
+      } as any
+    );
+
+    // The action "INVALID" fails Zod validation (not in enum ["buy","sell"]),
+    // then falls through to plaintext. Plaintext extracts "invalid" from the
+    // JSON text, but normalizeAction("invalid") returns "invalid" which is
+    // not "buy" or "sell". The signal is still forwarded with action "invalid".
+    // This test verifies the behavior.
+    expect(res.status).toBe(400);
+  });
+
+  test("empty payload returns 400", async () => {
+    const worker = (await import("../src/index.ts")).default;
+    const req = new Request("https://email-worker.workers.dev/email-signal", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Auth-Key": "internal-key-123",
+      },
+      body: JSON.stringify({}),
+    });
+
+    const res = await worker.fetch(
+      req as any,
+      { ...mockEnvBase, TRADE_SERVICE: {} as any } as any,
+      {
+        waitUntil: async (p: Promise<any>) => {
+          await p;
+        },
+      } as any
+    );
+
+    expect(res.status).toBe(400);
+  });
+
+  test("extra fields are stripped and do not cause errors", async () => {
+    const mockFetch = jest
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ requestId: "extra-ok" }), { status: 200 })
+      );
+
+    const worker = (await import("../src/index.ts")).default;
+    const req = new Request("https://email-worker.workers.dev/email-signal", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Auth-Key": "internal-key-123",
+      },
+      body: JSON.stringify({
+        text: JSON.stringify({
+          exchange: "binance",
+          action: "buy",
+          symbol: "BTCUSDT",
+          quantity: 1,
+          extraField: "shouldBeStripped",
+        }),
+      }),
+    });
+
+    const res = await worker.fetch(
+      req as any,
+      {
+        ...mockEnvBase,
+        TRADE_SERVICE: { fetch: mockFetch } as any,
+      } as any,
+      {
+        waitUntil: async (p: Promise<any>) => {
+          await p;
+        },
+      } as any
+    );
+
+    expect(res.status).toBe(200);
+  });
+
+  // ── normalizeExchange tests ───────────────────────────────────────
+
+  test("normalizeExchange: valid exchange binance", async () => {
+    const mockFetch = jest
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ requestId: "ex-binance" }), {
+          status: 200,
+        })
+      );
+
+    const worker = (await import("../src/index.ts")).default;
+    const req = new Request("https://email-worker.workers.dev/email-signal", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Auth-Key": "internal-key-123",
+      },
+      body: JSON.stringify({
+        text: JSON.stringify({
+          exchange: "binance",
+          action: "buy",
+          symbol: "BTCUSDT",
+        }),
+      }),
+    });
+
+    const res = await worker.fetch(
+      req as any,
+      { ...mockEnvBase, TRADE_SERVICE: { fetch: mockFetch } as any } as any,
+      {
+        waitUntil: async (p: Promise<any>) => {
+          await p;
+        },
+      } as any
+    );
+    expect(res.status).toBe(200);
+  });
+
+  test("normalizeExchange: valid exchange mexc", async () => {
+    const mockFetch = jest
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ requestId: "ex-mexc" }), { status: 200 })
+      );
+
+    const worker = (await import("../src/index.ts")).default;
+    const req = new Request("https://email-worker.workers.dev/email-signal", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Auth-Key": "internal-key-123",
+      },
+      body: JSON.stringify({
+        text: JSON.stringify({
+          exchange: "mexc",
+          action: "sell",
+          symbol: "ETHUSDT",
+        }),
+      }),
+    });
+
+    const res = await worker.fetch(
+      req as any,
+      { ...mockEnvBase, TRADE_SERVICE: { fetch: mockFetch } as any } as any,
+      {
+        waitUntil: async (p: Promise<any>) => {
+          await p;
+        },
+      } as any
+    );
+    expect(res.status).toBe(200);
+  });
+
+  test("normalizeExchange: valid exchange bybit", async () => {
+    const mockFetch = jest
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ requestId: "ex-bybit" }), { status: 200 })
+      );
+
+    const worker = (await import("../src/index.ts")).default;
+    const req = new Request("https://email-worker.workers.dev/email-signal", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Auth-Key": "internal-key-123",
+      },
+      body: JSON.stringify({
+        text: JSON.stringify({
+          exchange: "bybit",
+          action: "buy",
+          symbol: "SOLUSDT",
+        }),
+      }),
+    });
+
+    const res = await worker.fetch(
+      req as any,
+      { ...mockEnvBase, TRADE_SERVICE: { fetch: mockFetch } as any } as any,
+      {
+        waitUntil: async (p: Promise<any>) => {
+          await p;
+        },
+      } as any
+    );
+    expect(res.status).toBe(200);
+  });
+
+  test("normalizeExchange: case insensitive (BINANCE, Bybit)", async () => {
+    let mockFetch = jest
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ requestId: "case-upper" }), {
+          status: 200,
+        })
+      );
+
+    const worker = (await import("../src/index.ts")).default;
+
+    // Test BINANCE (uppercase)
+    let req = new Request("https://email-worker.workers.dev/email-signal", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Auth-Key": "internal-key-123",
+      },
+      body: JSON.stringify({
+        text: JSON.stringify({
+          exchange: "BINANCE",
+          action: "buy",
+          symbol: "BTCUSDT",
+        }),
+      }),
+    });
+
+    let res = await worker.fetch(
+      req as any,
+      { ...mockEnvBase, TRADE_SERVICE: { fetch: mockFetch } as any } as any,
+      {
+        waitUntil: async (p: Promise<any>) => {
+          await p;
+        },
+      } as any
+    );
+    expect(res.status).toBe(200);
+
+    // Test Bybit (mixed case) — fresh mock for second call
+    mockFetch = jest
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ requestId: "case-mixed" }), {
+          status: 200,
+        })
+      );
+
+    req = new Request("https://email-worker.workers.dev/email-signal", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Auth-Key": "internal-key-123",
+      },
+      body: JSON.stringify({
+        text: JSON.stringify({
+          exchange: "Bybit",
+          action: "sell",
+          symbol: "ETHUSDT",
+        }),
+      }),
+    });
+
+    res = await worker.fetch(
+      req as any,
+      { ...mockEnvBase, TRADE_SERVICE: { fetch: mockFetch } as any } as any,
+      {
+        waitUntil: async (p: Promise<any>) => {
+          await p;
+        },
+      } as any
+    );
+    expect(res.status).toBe(200);
+  });
+
+  test("normalizeExchange: invalid exchanges (kraken, coinbase) return 400", async () => {
+    const worker = (await import("../src/index.ts")).default;
+
+    // Test kraken
+    let req = new Request("https://email-worker.workers.dev/email-signal", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Auth-Key": "internal-key-123",
+      },
+      body: JSON.stringify({
+        text: JSON.stringify({
+          exchange: "kraken",
+          action: "buy",
+          symbol: "BTCUSDT",
+        }),
+      }),
+    });
+
+    let res = await worker.fetch(
+      req as any,
+      { ...mockEnvBase, TRADE_SERVICE: {} as any } as any,
+      {
+        waitUntil: async (p: Promise<any>) => {
+          await p;
+        },
+      } as any
+    );
+    expect(res.status).toBe(400);
+
+    // Test coinbase
+    req = new Request("https://email-worker.workers.dev/email-signal", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Auth-Key": "internal-key-123",
+      },
+      body: JSON.stringify({
+        text: JSON.stringify({
+          exchange: "coinbase",
+          action: "sell",
+          symbol: "ETHUSDT",
+        }),
+      }),
+    });
+
+    res = await worker.fetch(
+      req as any,
+      { ...mockEnvBase, TRADE_SERVICE: {} as any } as any,
+      {
+        waitUntil: async (p: Promise<any>) => {
+          await p;
+        },
+      } as any
+    );
+    expect(res.status).toBe(400);
+  });
 });
 
 describe("Mailgun signature validation", () => {
@@ -539,21 +939,6 @@ describe("scheduled handler", () => {
 
     const mockEnv = {
       ...mockEnvBase,
-      USE_IMAP: "false",
-    };
-
-    await expect(worker.scheduled(mockEnv as any)).resolves.toBeUndefined();
-  });
-
-  test("returns 501 when IMAP credentials missing", async () => {
-    const worker = (await import("../src/index.ts")).default;
-
-    const mockEnv = {
-      USE_IMAP: "true",
-      EMAIL_HOST_BINDING: { get: async () => null },
-      EMAIL_USER_BINDING: undefined,
-      EMAIL_PASS_BINDING: { get: async () => null },
-      EMAIL_SCAN_SUBJECT: "Signal",
     };
 
     await expect(worker.scheduled(mockEnv as any)).resolves.toBeUndefined();

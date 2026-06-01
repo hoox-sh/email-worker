@@ -1,29 +1,6 @@
 import { describe, expect, test, vi } from "bun:test";
+import { generateMailgunSignature } from "./helpers";
 import worker from "../src/index";
-
-async function generateMailgunSignature(
-  timestamp: string,
-  token: string,
-  apiKey: string
-): Promise<string> {
-  const encoder = new TextEncoder();
-  const dataToSign = timestamp + token;
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(apiKey),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"]
-  );
-  const signature = await crypto.subtle.sign(
-    "HMAC",
-    key,
-    encoder.encode(dataToSign)
-  );
-  return Array.from(new Uint8Array(signature))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
 
 describe("Email Worker fetch handler", () => {
   // Helper to create mock ExecutionContext

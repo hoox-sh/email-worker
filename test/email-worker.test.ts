@@ -1,45 +1,5 @@
 import { describe, expect, test, beforeEach, jest } from "bun:test";
-
-const TEST_MAILGUN_API_KEY = "test-mailgun-api-key";
-
-async function generateMailgunSignature(
-  timestamp: string,
-  token: string,
-  apiKey: string
-): Promise<string> {
-  const encoder = new TextEncoder();
-  const dataToSign = timestamp + token;
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(apiKey),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"]
-  );
-  const signature = await crypto.subtle.sign(
-    "HMAC",
-    key,
-    encoder.encode(dataToSign)
-  );
-  return Array.from(new Uint8Array(signature))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-const mockEnvBase = {
-  CONFIG_KV: {
-    get: async () => null,
-    put: async () => {},
-    list: async () => ({ keys: [] }),
-    delete: async () => {},
-    getWithMetadata: async () => ({ value: null, metadata: null }),
-  },
-  EMAIL_HOST_BINDING: "imap.example.com",
-  EMAIL_USER_BINDING: "user@example.com",
-  EMAIL_PASS_BINDING: "password123",
-  INTERNAL_KEY_BINDING: "internal-key-123",
-  MAILGUN_API_KEY: TEST_MAILGUN_API_KEY,
-};
+import { generateMailgunSignature, mockEnvBase } from "./helpers";
 
 describe("email-worker", () => {
   test("GET /health returns healthy", async () => {
@@ -142,7 +102,7 @@ describe("email-worker", () => {
     const signature = await generateMailgunSignature(
       timestamp,
       token,
-      TEST_MAILGUN_API_KEY
+      mockEnvBase.MAILGUN_API_KEY
     );
 
     const worker = (await import("../src/index.ts")).default;
@@ -200,7 +160,7 @@ describe("email-worker", () => {
     const signature = await generateMailgunSignature(
       timestamp,
       token,
-      TEST_MAILGUN_API_KEY
+      mockEnvBase.MAILGUN_API_KEY
     );
 
     const worker = (await import("../src/index.ts")).default;
@@ -587,13 +547,11 @@ describe("email-worker", () => {
   // ── normalizeExchange tests ───────────────────────────────────────
 
   test("normalizeExchange: valid exchange binance", async () => {
-    const mockFetch = jest
-      .fn()
-      .mockResolvedValue(
-        new Response(JSON.stringify({ requestId: "ex-binance" }), {
-          status: 200,
-        })
-      );
+    const mockFetch = jest.fn().mockResolvedValue(
+      new Response(JSON.stringify({ requestId: "ex-binance" }), {
+        status: 200,
+      })
+    );
 
     const worker = (await import("../src/index.ts")).default;
     const req = new Request("https://email-worker.workers.dev/email-signal", {
@@ -694,13 +652,11 @@ describe("email-worker", () => {
   });
 
   test("normalizeExchange: case insensitive (BINANCE, Bybit)", async () => {
-    let mockFetch = jest
-      .fn()
-      .mockResolvedValue(
-        new Response(JSON.stringify({ requestId: "case-upper" }), {
-          status: 200,
-        })
-      );
+    let mockFetch = jest.fn().mockResolvedValue(
+      new Response(JSON.stringify({ requestId: "case-upper" }), {
+        status: 200,
+      })
+    );
 
     const worker = (await import("../src/index.ts")).default;
 
@@ -732,13 +688,11 @@ describe("email-worker", () => {
     expect(res.status).toBe(200);
 
     // Test Bybit (mixed case) — fresh mock for second call
-    mockFetch = jest
-      .fn()
-      .mockResolvedValue(
-        new Response(JSON.stringify({ requestId: "case-mixed" }), {
-          status: 200,
-        })
-      );
+    mockFetch = jest.fn().mockResolvedValue(
+      new Response(JSON.stringify({ requestId: "case-mixed" }), {
+        status: 200,
+      })
+    );
 
     req = new Request("https://email-worker.workers.dev/email-signal", {
       method: "POST",
@@ -896,7 +850,7 @@ describe("Mailgun signature validation", () => {
     const signature = await generateMailgunSignature(
       timestamp,
       token,
-      TEST_MAILGUN_API_KEY
+      mockEnvBase.MAILGUN_API_KEY
     );
 
     const worker = (await import("../src/index.ts")).default;

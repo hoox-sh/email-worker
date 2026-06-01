@@ -255,11 +255,13 @@ async function processSignal(
 
 // ── Signal parsing ──────────────────────────────────────────────────
 
-interface SignalPatterns {
+export interface SignalPatterns {
   coinPattern: RegExp;
   actionPattern: RegExp;
   quantityMultiplier: number;
 }
+
+export type { EmailSignal };
 
 async function loadSignalPatterns(env: Env): Promise<SignalPatterns> {
   const [coinPattern, actionPattern, quantityMultiplier] = await Promise.all([
@@ -281,7 +283,7 @@ async function loadSignalPatterns(env: Env): Promise<SignalPatterns> {
   };
 }
 
-function parseEmailSignal(
+export function parseEmailSignal(
   body: string,
   patterns: SignalPatterns
 ): EmailSignal | null {

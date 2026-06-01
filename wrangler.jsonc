@@ -43,6 +43,11 @@
       "id": "c5917667a21745e390ff969f32b1847d"
     }
   ],
+  "send_email": [
+    {
+      "name": "EMAIL"
+    }
+  ],
   "services": [
     {
       "binding": "TRADE_SERVICE",

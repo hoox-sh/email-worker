@@ -92,6 +92,15 @@ export default {
     );
     // Use Mailgun webhook or direct JSON POST instead
   },
+
+  async email(
+    message: ForwardableEmailMessage,
+    env: Env,
+    ctx: ExecutionContext
+  ): Promise<void> {
+    const { emailHandler } = await import("./email-handler");
+    return emailHandler(message, env, ctx);
+  },
 };
 
 // ── Handlers ────────────────────────────────────────────────────────
@@ -263,7 +272,7 @@ export interface SignalPatterns {
 
 export type { EmailSignal };
 
-async function loadSignalPatterns(env: Env): Promise<SignalPatterns> {
+export async function loadSignalPatterns(env: Env): Promise<SignalPatterns> {
   const [coinPattern, actionPattern, quantityMultiplier] = await Promise.all([
     env.CONFIG_KV?.get(KVKeys.KV_EMAIL_COIN_PATTERN).then(
       (v) => v || "BTC|ETH|SOL"

@@ -888,13 +888,15 @@ describe("Mailgun signature validation", () => {
 });
 
 describe("scheduled handler", () => {
-  test("skips IMAP when USE_IMAP is not true", async () => {
+  test("skips scheduled handler (IMAP not supported in Workers edge runtime)", async () => {
     const worker = (await import("../src/index.ts")).default;
 
     const mockEnv = {
       ...mockEnvBase,
     };
 
-    await expect(worker.scheduled(mockEnv as any)).resolves.toBeUndefined();
+    await expect(
+      worker.scheduled(mockEnv as any, {} as any)
+    ).resolves.toBeUndefined();
   });
 });

@@ -179,24 +179,9 @@ describe("Email Worker fetch handler", () => {
 });
 
 describe("Email Worker scheduled handler", () => {
-  test("should handle scheduled event when USE_IMAP is true", async () => {
-    const mockEnv = {
-      USE_IMAP: "true",
-      EMAIL_HOST_BINDING: "imap.test.com",
-      EMAIL_USER_BINDING: "user@test.com",
-      EMAIL_PASS_BINDING: "password",
-    } as any;
+  test("should handle scheduled event (IMAP not supported in Workers edge runtime)", async () => {
+    const mockEnv = {} as any;
 
-    // It currently just returns an unimplemented log/response but doesn't return anything to scheduled
-    // However, calling it shouldn't crash.
-    await expect(worker.scheduled(mockEnv)).resolves.toBeUndefined();
-  });
-
-  test("should skip IMAP scan if USE_IMAP is false", async () => {
-    const mockEnv = {
-      USE_IMAP: "false",
-    } as any;
-
-    await expect(worker.scheduled(mockEnv)).resolves.toBeUndefined();
+    await expect(worker.scheduled(mockEnv, {} as any)).resolves.toBeUndefined();
   });
 });

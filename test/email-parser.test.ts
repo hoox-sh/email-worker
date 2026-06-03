@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import { parseEmailSignal } from "../src/index";
-import type { EmailSignal } from "../src/index";
 
 const defaultPatterns = {
   coinPattern: /BTC|ETH|SOL/i,

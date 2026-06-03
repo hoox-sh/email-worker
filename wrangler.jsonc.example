@@ -32,13 +32,18 @@
     }
   },
 
-  // SECRETS: Set via 'wrangler secret put <name>'. Not present in this example.
-  // INTERNAL_KEY_BINDING, MAILGUN_API_KEY, EMAIL_HOST_BINDING, EMAIL_USER_BINDING, EMAIL_PASS_BINDING
+  // SECRETS: Set via 'wrangler secret put <name>'
+  // INTERNAL_KEY_BINDING - Shared internal auth key for service-to-service calls
+  // MAILGUN_API_KEY - Mailgun webhook signature verification (HMAC-SHA256)
+  // EMAIL_HOST_BINDING - Reserved for future email host configuration
+  // EMAIL_USER_BINDING - Reserved for future email user configuration
+  // EMAIL_PASS_BINDING - Reserved for future email password configuration
+  // EMAIL_SCAN_SUBJECT - Reserved for future use
 
   // VARS: Environment variables
   "vars": {
     // TRADE_WORKER_NAME: Service name of trade-worker
-    "TRADE_WORKER_NAME": "trade-worker",
+    "TRADE_WORKER_NAME": "trade-worker"
   },
 
   // KV_NAMESPACES: Key-Value storage for config
@@ -53,11 +58,18 @@
   "services": [
     {
       "binding": "TRADE_SERVICE",
-      "service": "trade-worker",
+      "service": "trade-worker"
     },
     {
       "binding": "ANALYTICS_SERVICE",
-      "service": "analytics-worker",
-    },
+      "service": "analytics-worker"
+    }
   ],
+
+  // SEND_EMAIL: Cloudflare Email Routing binding for inbound email processing
+  "send_email": [
+    {
+      "name": "EMAIL"
+    }
+  ]
 }

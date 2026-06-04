@@ -27,14 +27,6 @@
       "invocation_logs": true
     }
   },
-  "secrets": [
-    "INTERNAL_KEY_BINDING",
-    "MAILGUN_API_KEY",
-    "EMAIL_HOST_BINDING",
-    "EMAIL_USER_BINDING",
-    "EMAIL_PASS_BINDING",
-    "EMAIL_SCAN_SUBJECT"
-  ],
   "vars": {
     "TRADE_WORKER_NAME": "trade-worker"
   },

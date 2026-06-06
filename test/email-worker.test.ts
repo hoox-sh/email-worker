@@ -886,17 +886,3 @@ describe("Mailgun signature validation", () => {
     expect(res.status).toBe(500);
   });
 });
-
-describe("scheduled handler", () => {
-  test("skips scheduled handler (IMAP not supported in Workers edge runtime)", async () => {
-    const worker = (await import("../src/index.ts")).default;
-
-    const mockEnv = {
-      ...mockEnvBase,
-    };
-
-    await expect(
-      worker.scheduled(mockEnv as any, {} as any)
-    ).resolves.toBeUndefined();
-  });
-});

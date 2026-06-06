@@ -177,11 +177,3 @@ describe("Email Worker fetch handler", () => {
     expect(res.status).toBe(500);
   });
 });
-
-describe("Email Worker scheduled handler", () => {
-  test("should handle scheduled event (IMAP not supported in Workers edge runtime)", async () => {
-    const mockEnv = {} as any;
-
-    await expect(worker.scheduled(mockEnv, {} as any)).resolves.toBeUndefined();
-  });
-});

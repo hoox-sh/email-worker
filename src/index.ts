@@ -9,6 +9,7 @@ import {
   withRequestLog,
   createInternalAuthMiddleware,
   validateJson,
+  timingSafeEqual,
 } from "@jango-blockchained/hoox-shared/middleware";
 import { createRouter } from "@jango-blockchained/hoox-shared/router";
 
@@ -86,13 +87,6 @@ export default {
     { service: "email-worker", module: "router" }
   ),
 
-  async scheduled(_env: Env, _ctx: ExecutionContext): Promise<void> {
-    logger.info(
-      "[SCHEDULED] Email scanning disabled — IMAP requires Node.js and is not available in Workers edge runtime"
-    );
-    // Use Mailgun webhook or direct JSON POST instead
-  },
-
   async email(
     message: ForwardableEmailMessage,
     env: Env,
@@ -142,7 +136,7 @@ async function handleMailgunWebhook(
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
 
-  if (signature !== expectedSignature) {
+  if (!timingSafeEqual(signature, expectedSignature)) {
     logger.warn("Invalid Mailgun signature");
     return Errors.unauthorized("Invalid signature");
   }

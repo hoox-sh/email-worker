@@ -1,0 +1,9 @@
+# Email Worker Environment Variables (local development)
+# Copy to .dev.vars and replace with actual values from `hoox setup` output.
+# .dev.vars is gitignored — never commit secrets.
+
+# Internal auth key used by createInternalAuthMiddleware()
+INTERNAL_KEY_BINDING=your_internal_key_binding_here
+
+# Note: Mailgun/IMAP config is optional. The email worker uses Cloudflare
+# Email Routing (send_email binding) for outbound sending by default.

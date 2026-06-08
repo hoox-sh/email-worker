@@ -13,7 +13,7 @@
     "@jango-blockchained/hoox-shared/kvKeys": "../../packages/shared/src/kvKeys.ts",
     "@jango-blockchained/hoox-shared/types/router": "../../packages/shared/src/types/router.ts"
   },
-  "compatibility_date": "2026-06-01",
+  "compatibility_date": "2026-06-08",
   "compatibility_flags": ["nodejs_compat"],
 
   "placement": {

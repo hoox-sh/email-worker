@@ -264,7 +264,19 @@ export interface SignalPatterns {
 
 export type { EmailSignal };
 
+// ── Pattern cache ───────────────────────────────────────────────────
+let cachedPatterns: {
+  patterns: SignalPatterns;
+  expiresAt: number;
+} | null = null;
+const PATTERN_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
 export async function loadSignalPatterns(env: Env): Promise<SignalPatterns> {
+  const now = Date.now();
+  if (cachedPatterns && now < cachedPatterns.expiresAt) {
+    return cachedPatterns.patterns;
+  }
+
   const [coinPattern, actionPattern, quantityMultiplier] = await Promise.all([
     env.CONFIG_KV?.get(KVKeys.KV_EMAIL_COIN_PATTERN).then(
       (v) => v || "BTC|ETH|SOL"
@@ -277,11 +289,18 @@ export async function loadSignalPatterns(env: Env): Promise<SignalPatterns> {
     ),
   ]);
 
-  return {
+  const patterns = {
     coinPattern: new RegExp(coinPattern as string, "i"),
     actionPattern: new RegExp(actionPattern as string, "i"),
     quantityMultiplier: quantityMultiplier ?? 1,
   };
+
+  cachedPatterns = {
+    patterns,
+    expiresAt: now + PATTERN_CACHE_TTL_MS,
+  };
+
+  return patterns;
 }
 
 export function parseEmailSignal(

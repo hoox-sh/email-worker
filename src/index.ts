@@ -85,6 +85,22 @@ export default {
     { service: "email-worker", module: "router" }
   ),
 
+  async scheduled(
+    _controller: ScheduledController,
+    env: Env,
+    _ctx: ExecutionContext
+  ): Promise<void> {
+    // IMAP scanning is NOT available in Cloudflare Workers edge runtime.
+    // Primary ingestion paths: Mailgun webhook (POST /webhook) and
+    // Cloudflare Email Routing (email handler). No scheduled polling needed.
+    //
+    // This scheduled handler exists so the cron trigger in wrangler.jsonc
+    // doesn't cause "no scheduled handler" warnings. It performs lightweight
+    // maintenance: refreshes the pattern cache from CONFIG_KV.
+    logger.info("Scheduled: refreshing signal patterns cache");
+    cachedPatterns = null; // invalidate cache so next parseEmailSignal reloads from KV
+  },
+
   async email(
     message: ForwardableEmailMessage,
     env: Env,

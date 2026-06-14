@@ -84,7 +84,7 @@ export async function emailHandler(
         status: response.status,
       });
     }
-  } catch (error) {
+  } catch (error: unknown) {
     logger.error("Email Routing handler error", { error });
   }
 }

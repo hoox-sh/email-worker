@@ -54,8 +54,6 @@ const WebhookPayloadSchema = z.object({
 
 // ── Constants ───────────────────────────────────────────────────────
 
-const KNOWN_EXCHANGES = ["binance", "mexc", "bybit"] as const;
-
 // ── Router setup ────────────────────────────────────────────────────
 
 const router = createRouter<Env>();

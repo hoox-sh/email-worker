@@ -11,7 +11,10 @@ import {
   validateJson,
   timingSafeEqual,
 } from "@jango-blockchained/hoox-shared/middleware";
-import { createRouter } from "@jango-blockchained/hoox-shared/router";
+import {
+  createRouter,
+  type MiddlewareHandler,
+} from "@jango-blockchained/hoox-shared/router";
 
 import { trackAnalytics } from "@jango-blockchained/hoox-shared/analytics";
 import type { AnalyticsEnv } from "@jango-blockchained/hoox-shared/analytics";
@@ -57,7 +60,11 @@ const WebhookPayloadSchema = z.object({
 // ── Router setup ────────────────────────────────────────────────────
 
 const router = createRouter<Env>();
-const requireAuth = createInternalAuthMiddleware();
+// Cast: createInternalAuthMiddleware returns MiddlewareHandler<InternalAuthEnv>
+// but our router is typed for MiddlewareHandler<Env>. The middleware only
+// reads `INTERNAL_KEY_BINDING` which is present on both types.
+const requireAuth =
+  createInternalAuthMiddleware() as unknown as MiddlewareHandler<Env>;
 
 router.get("/health", async (_request, _env, _ctx) => {
   return healthCheck({ worker: "email-worker" });
@@ -85,7 +92,7 @@ export default {
 
   async scheduled(
     _controller: ScheduledController,
-    env: Env,
+    _env: Env,
     _ctx: ExecutionContext
   ): Promise<void> {
     // IMAP scanning is NOT available in Cloudflare Workers edge runtime.

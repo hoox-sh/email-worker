@@ -6,7 +6,7 @@ import { createLogger } from "@jango-blockchained/hoox-shared/middleware";
 import { serviceFetch } from "@jango-blockchained/hoox-shared/service-bindings";
 import { trackAnalytics } from "@jango-blockchained/hoox-shared/analytics";
 import { loadSignalPatterns, parseEmailSignal } from "./index";
-import type { Env, EmailSignal } from "./index";
+import type { Env } from "./index";
 
 const logger = createLogger({ service: "email-worker" });
 

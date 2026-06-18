@@ -200,8 +200,15 @@ async function processEmail(
   ctx: ExecutionContext
 ): Promise<Response> {
   const signalPatterns = await loadSignalPatterns(env);
-  const signal = parseEmailSignal(body, signalPatterns);
 
+  let errorResponse: Response | null = null;
+  const signal = parseEmailSignal(body, signalPatterns, {
+    set: (resp) => {
+      errorResponse = resp;
+    },
+  });
+
+  if (errorResponse) return errorResponse;
   if (!signal) {
     return Errors.badRequest("No valid signal in email");
   }
@@ -246,7 +253,9 @@ async function processSignal(
             symbol: signal.symbol,
             confidence: 0.5,
           },
-        })
+        }).catch((err) =>
+          logger.error("trackAnalytics failed", { error: String(err) })
+        )
       );
 
       return Errors.internal(`Trade worker error: ${response.status}`);
@@ -263,7 +272,9 @@ async function processSignal(
           symbol: signal.symbol,
           confidence: 0.5,
         },
-      })
+      }).catch((err) =>
+        logger.error("trackAnalytics failed", { error: String(err) })
+      )
     );
 
     return createJsonResponse(
@@ -326,24 +337,30 @@ export async function loadSignalPatterns(env: Env): Promise<SignalPatterns> {
 
 export function parseEmailSignal(
   body: string,
-  patterns: SignalPatterns
+  patterns: SignalPatterns,
+  signalError?: { set: (resp: Response) => void }
 ): EmailSignal | null {
   try {
-    const data = JSON.parse(body);
-    const parsed = validateJson(EmailSignalSchema, data);
-    if (parsed.ok) {
-      const signal = parsed.value;
-      const normalizedExchange = normalizeExchange(signal.exchange);
-      if (!normalizedExchange) return null;
-      return {
-        exchange: normalizedExchange,
-        action: signal.action,
-        symbol: signal.symbol.toUpperCase(),
-        quantity: signal.quantity * patterns.quantityMultiplier,
-        price: signal.price,
-        leverage: signal.leverage,
-      };
+    const parsed = EmailSignalSchema.safeParse(JSON.parse(body));
+    if (!parsed.success) {
+      if (signalError) {
+        signalError.set(
+          createJsonResponse({ error: "Invalid signal format" }, 400)
+        );
+      }
+      return null;
     }
+    const data = parsed.data;
+    const normalizedExchange = normalizeExchange(data.exchange);
+    if (!normalizedExchange) return null;
+    return {
+      exchange: normalizedExchange,
+      action: data.action,
+      symbol: data.symbol.toUpperCase(),
+      quantity: data.quantity * patterns.quantityMultiplier,
+      price: data.price,
+      leverage: data.leverage,
+    };
   } catch {
     // Not JSON — fall through to plaintext parsing
   }

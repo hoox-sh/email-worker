@@ -87,7 +87,9 @@ describe("email-worker", () => {
     );
 
     expect(res.status).toBe(400);
-    expect(((await res.json()) as any).error).toContain("No valid signal");
+    expect(((await res.json()) as any).error).toContain(
+      "Invalid signal format"
+    );
   });
 
   test("POST mailgun webhook processes form data with valid signature", async () => {

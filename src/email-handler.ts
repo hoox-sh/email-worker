@@ -71,7 +71,9 @@ export async function emailHandler(
           symbol: signal.symbol,
           confidence: 0.5,
         },
-      })
+      }).catch((err) =>
+        logger.error("trackAnalytics failed", { error: String(err) })
+      )
     );
 
     if (response.ok) {

@@ -53,10 +53,5 @@
       "binding": "ANALYTICS_SERVICE",
       "service": "analytics-worker"
     }
-  ],
-  "secrets": [
-    {
-      "name": "MAILGUN_API_KEY"
-    }
   ]
 }

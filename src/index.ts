@@ -306,6 +306,27 @@ let cachedPatterns: {
 } | null = null;
 const PATTERN_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
+/**
+ * Compile a KV-sourced regex with ReDoS / injection guards.
+ * Rejects oversized sources, dangerous constructs, and invalid syntax;
+ * falls back to a known-safe default pattern.
+ */
+export function compileSafePattern(source: string, fallback: string): RegExp {
+  const MAX_LEN = 128;
+  // Allow only alternation of simple tokens (letters, digits, |, +, -, _, space).
+  // Disallow nested quantifiers, lookaround, and backreferences that enable ReDoS.
+  const SAFE = /^[A-Za-z0-9|_\-+ ]{1,128}$/;
+  const src = (source || "").trim();
+  const candidate = src.length > 0 && src.length <= MAX_LEN && SAFE.test(src)
+    ? src
+    : fallback;
+  try {
+    return new RegExp(candidate, "i");
+  } catch {
+    return new RegExp(fallback, "i");
+  }
+}
+
 export async function loadSignalPatterns(env: Env): Promise<SignalPatterns> {
   const now = Date.now();
   if (cachedPatterns && now < cachedPatterns.expiresAt) {
@@ -325,8 +346,11 @@ export async function loadSignalPatterns(env: Env): Promise<SignalPatterns> {
   ]);
 
   const patterns = {
-    coinPattern: new RegExp(coinPattern as string, "i"),
-    actionPattern: new RegExp(actionPattern as string, "i"),
+    coinPattern: compileSafePattern(String(coinPattern), "BTC|ETH|SOL"),
+    actionPattern: compileSafePattern(
+      String(actionPattern),
+      "buy|sell|long|short"
+    ),
     quantityMultiplier: quantityMultiplier ?? 1,
   };
 

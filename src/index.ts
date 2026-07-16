@@ -323,9 +323,8 @@ export function compileSafePattern(source: string, fallback: string): RegExp {
   // Disallow nested quantifiers, lookaround, and backreferences that enable ReDoS.
   const SAFE = /^[A-Za-z0-9|_\-+ ]{1,128}$/;
   const src = (source || "").trim();
-  const candidate = src.length > 0 && src.length <= MAX_LEN && SAFE.test(src)
-    ? src
-    : fallback;
+  const candidate =
+    src.length > 0 && src.length <= MAX_LEN && SAFE.test(src) ? src : fallback;
   try {
     return new RegExp(candidate, "i");
   } catch {

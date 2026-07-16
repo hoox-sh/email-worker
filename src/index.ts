@@ -20,7 +20,7 @@ import { trackAnalytics } from "@jango-blockchained/hoox-shared/analytics";
 import type { AnalyticsEnv } from "@jango-blockchained/hoox-shared/analytics";
 import { healthCheck } from "@jango-blockchained/hoox-shared/health";
 import { KVKeys } from "@jango-blockchained/hoox-shared/kvKeys";
-import { serviceFetch } from "@jango-blockchained/hoox-shared/service-bindings";
+import { authenticatedServiceFetch } from "@jango-blockchained/hoox-shared/service-bindings";
 import { z } from "zod";
 
 const logger = createLogger({ service: "email-worker" });
@@ -239,12 +239,15 @@ async function processSignal(
       return Errors.internal("Trade service not configured");
     }
 
-    const response = await serviceFetch(env.TRADE_SERVICE, "/webhook", signal, {
-      headers: {
-        "X-Internal-Auth-Key": internalKey,
-        "X-Source": "email-worker",
-      },
-    });
+    const response = await authenticatedServiceFetch(
+      env.TRADE_SERVICE,
+      env,
+      "/webhook",
+      signal,
+      {
+        headers: { "X-Source": "email-worker" },
+      }
+    );
 
     if (!response.ok) {
       // Track failed signal forwarding (non-blocking)

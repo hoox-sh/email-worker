@@ -3,7 +3,7 @@
 
 import PostalMime from "postal-mime";
 import { createLogger } from "@jango-blockchained/hoox-shared/middleware";
-import { serviceFetch } from "@jango-blockchained/hoox-shared/service-bindings";
+import { authenticatedServiceFetch } from "@jango-blockchained/hoox-shared/service-bindings";
 import { trackAnalytics } from "@jango-blockchained/hoox-shared/analytics";
 import { loadSignalPatterns, parseEmailSignal } from "./index";
 import type { Env } from "./index";
@@ -55,12 +55,15 @@ export async function emailHandler(
       return;
     }
 
-    const response = await serviceFetch(env.TRADE_SERVICE, "/webhook", signal, {
-      headers: {
-        "X-Internal-Auth-Key": internalKey,
-        "X-Source": "email-worker",
-      },
-    });
+    const response = await authenticatedServiceFetch(
+      env.TRADE_SERVICE,
+      env,
+      "/webhook",
+      signal,
+      {
+        headers: { "X-Source": "email-worker" },
+      }
+    );
 
     // Track analytics (non-blocking)
     ctx.waitUntil(

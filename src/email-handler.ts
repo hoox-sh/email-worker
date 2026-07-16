@@ -3,7 +3,11 @@
 
 import PostalMime from "postal-mime";
 import { createLogger } from "@jango-blockchained/hoox-shared/middleware";
-import { authenticatedServiceFetch } from "@jango-blockchained/hoox-shared/service-bindings";
+import {
+  authenticatedServiceFetch,
+  TRADE_EXECUTE_AUTH_KEY_FIELDS,
+  resolveInternalAuthKey,
+} from "@jango-blockchained/hoox-shared/service-bindings";
 import { trackAnalytics } from "@jango-blockchained/hoox-shared/analytics";
 import { loadSignalPatterns, parseEmailSignal } from "./index";
 import type { Env } from "./index";
@@ -44,9 +48,8 @@ export async function emailHandler(
     });
 
     // Forward to trade-worker
-    const internalKey = env.INTERNAL_KEY_BINDING;
-    if (!internalKey) {
-      logger.error("INTERNAL_KEY_BINDING not configured");
+    if (!resolveInternalAuthKey(env, TRADE_EXECUTE_AUTH_KEY_FIELDS)) {
+      logger.error("Trade execute auth key not configured");
       return;
     }
 
@@ -62,6 +65,7 @@ export async function emailHandler(
       signal,
       {
         headers: { "X-Source": "email-worker" },
+        internalKeyFields: TRADE_EXECUTE_AUTH_KEY_FIELDS,
       }
     );
 

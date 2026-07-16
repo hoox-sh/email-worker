@@ -20,7 +20,11 @@ import { trackAnalytics } from "@jango-blockchained/hoox-shared/analytics";
 import type { AnalyticsEnv } from "@jango-blockchained/hoox-shared/analytics";
 import { healthCheck } from "@jango-blockchained/hoox-shared/health";
 import { KVKeys } from "@jango-blockchained/hoox-shared/kvKeys";
-import { authenticatedServiceFetch } from "@jango-blockchained/hoox-shared/service-bindings";
+import {
+  authenticatedServiceFetch,
+  TRADE_EXECUTE_AUTH_KEY_FIELDS,
+  resolveInternalAuthKey,
+} from "@jango-blockchained/hoox-shared/service-bindings";
 import { z } from "zod";
 
 const logger = createLogger({ service: "email-worker" });
@@ -227,11 +231,9 @@ async function processSignal(
   logger.info("Email signal processed", { signal });
 
   try {
-    const internalKey = env.INTERNAL_KEY_BINDING;
-
-    if (!internalKey) {
-      logger.error("INTERNAL_KEY_BINDING not configured");
-      return Errors.internal("Internal authentication not configured");
+    if (!resolveInternalAuthKey(env, TRADE_EXECUTE_AUTH_KEY_FIELDS)) {
+      logger.error("Trade execute auth key not configured");
+      return Errors.internal("Trade execute auth key not configured");
     }
 
     if (!env.TRADE_SERVICE) {
@@ -246,6 +248,7 @@ async function processSignal(
       signal,
       {
         headers: { "X-Source": "email-worker" },
+        internalKeyFields: TRADE_EXECUTE_AUTH_KEY_FIELDS,
       }
     );
 

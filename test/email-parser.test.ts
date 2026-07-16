@@ -14,7 +14,7 @@ describe("Email Signal Parsing", () => {
     const result = parseEmailSignal(json, defaultPatterns);
     expect(result).not.toBeNull();
     expect(result!.exchange).toBe("binance");
-    expect(result!.action).toBe("buy");
+    expect(result!.action).toBe("LONG");
     expect(result!.symbol).toBe("BTCUSDT");
   });
 

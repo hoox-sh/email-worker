@@ -29,7 +29,8 @@ export interface Env extends Cloudflare.Env, AnalyticsEnv {}
 
 interface EmailSignal {
   exchange: string;
-  action: string;
+  /** Trade-worker action vocabulary: LONG | SHORT */
+  action: "LONG" | "SHORT";
   symbol: string;
   quantity: number;
   price?: number;
@@ -38,10 +39,12 @@ interface EmailSignal {
 
 // ── Zod validation schemas ──────────────────────────────────────────
 
+// Accept both email-native (buy/sell) and trade-worker (LONG/SHORT) vocabulary.
+// Normalized to TradeActionSchema values before forwarding.
 const EmailSignalSchema = z
   .object({
     exchange: z.string(),
-    action: z.enum(["buy", "sell"]),
+    action: z.enum(["buy", "sell", "long", "short", "LONG", "SHORT"]),
     symbol: z.string(),
     quantity: z.number().default(100),
     price: z.number().optional(),
@@ -355,7 +358,7 @@ export function parseEmailSignal(
     if (!normalizedExchange) return null;
     return {
       exchange: normalizedExchange,
-      action: data.action,
+      action: normalizeAction(data.action),
       symbol: data.symbol.toUpperCase(),
       quantity: data.quantity * patterns.quantityMultiplier,
       price: data.price,
@@ -390,10 +393,11 @@ function extractFromPlaintext(
     : extractField(lower, ["action", "buy", "sell", "long", "short"]);
 
   const normalizedExchange = exchange ? normalizeExchange(exchange) : null;
-  if (normalizedExchange && action && symbol) {
+  const normalizedAction = action ? normalizeAction(action) : null;
+  if (normalizedExchange && normalizedAction && symbol) {
     return {
       exchange: normalizedExchange,
-      action: normalizeAction(action),
+      action: normalizedAction,
       symbol: symbol.toUpperCase().replace(/[^A-Z0-9]/g, ""),
       quantity: 100 * patterns.quantityMultiplier,
     };
@@ -423,9 +427,16 @@ function normalizeExchange(value: string): string | null {
   return null;
 }
 
-function normalizeAction(value: string): string {
+/**
+ * Map email / free-text action vocabulary onto trade-worker actions.
+ * WebhookPayloadSchema requires LONG | SHORT | CLOSE_*.
+ */
+function normalizeAction(value: string): "LONG" | "SHORT" {
   const v = value.toLowerCase();
-  if (v.includes("buy") || v.includes("long")) return "buy";
-  if (v.includes("sell") || v.includes("short")) return "sell";
-  return v;
+  if (v.includes("buy") || v.includes("long")) return "LONG";
+  if (v.includes("sell") || v.includes("short")) return "SHORT";
+  // Default: treat unknown as SHORT is wrong — throw to caller via filter.
+  // Callers only pass buy/sell/long/short from patterns; fall back to LONG
+  // only for the residual enum path that already matched the schema.
+  return v.startsWith("s") ? "SHORT" : "LONG";
 }

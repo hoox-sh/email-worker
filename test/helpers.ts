@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) 2026 HOOX · HOOX · jango-blockchained
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 // test/helpers.ts — Shared test utilities for email-worker tests
 
 export async function generateMailgunSignature(

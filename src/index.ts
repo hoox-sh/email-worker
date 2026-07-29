@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) 2026 HOOX · HOOX · jango-blockchained
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 // email-worker/src/index.ts - Scans email inbox and forwards signals to trade-worker
 
 import {
@@ -39,6 +44,8 @@ interface EmailSignal {
   quantity: number;
   price?: number;
   leverage?: number;
+  /** When true, execute against exchange testnet/sandbox (if supported). */
+  test?: boolean;
 }
 
 // ── Zod validation schemas ──────────────────────────────────────────
@@ -53,6 +60,7 @@ const EmailSignalSchema = z
     quantity: z.number().default(100),
     price: z.number().optional(),
     leverage: z.number().optional(),
+    test: z.boolean().optional(),
   })
   .strip();
 
@@ -392,6 +400,7 @@ export function parseEmailSignal(
       quantity: data.quantity * patterns.quantityMultiplier,
       price: data.price,
       leverage: data.leverage,
+      test: data.test,
     };
   } catch {
     // Not JSON — fall through to plaintext parsing

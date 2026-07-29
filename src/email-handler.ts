@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) 2026 HOOX · HOOX · jango-blockchained
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 // email-handler.ts — Cloudflare Email Routing inbound email handler
 // Parses incoming emails for trading signals and forwards them to trade-worker
 

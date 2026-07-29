@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) 2026 HOOX · HOOX · jango-blockchained
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 // test/email-handler.test.ts — Tests for Cloudflare Email Routing handler
 
 import { describe, expect, test, jest } from "bun:test";

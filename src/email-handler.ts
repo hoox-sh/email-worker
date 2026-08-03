@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2026 HOOX · HOOX · jango-blockchained
+ * Copyright (c) 2026 HOOX · HOOX · jango-blockchained (hoox-sh)
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -7,13 +7,13 @@
 // Parses incoming emails for trading signals and forwards them to trade-worker
 
 import PostalMime from "postal-mime";
-import { createLogger } from "@jango-blockchained/hoox-shared/middleware";
+import { createLogger } from "@hoox-sh/hoox-shared/middleware";
 import {
   authenticatedServiceFetch,
   TRADE_EXECUTE_AUTH_KEY_FIELDS,
   resolveInternalAuthKey,
-} from "@jango-blockchained/hoox-shared/service-bindings";
-import { trackAnalytics } from "@jango-blockchained/hoox-shared/analytics";
+} from "@hoox-sh/hoox-shared/service-bindings";
+import { trackAnalytics } from "@hoox-sh/hoox-shared/analytics";
 import { loadSignalPatterns, parseEmailSignal } from "./index";
 import type { Env } from "./index";
 

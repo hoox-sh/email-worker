@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2026 HOOX · HOOX · jango-blockchained
+ * Copyright (c) 2026 HOOX · HOOX · jango-blockchained (hoox-sh)
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -8,28 +8,28 @@
 import {
   Errors,
   createJsonResponse,
-} from "@jango-blockchained/hoox-shared/errors";
+} from "@hoox-sh/hoox-shared/errors";
 import {
   createLogger,
   withRequestLog,
   createInternalAuthMiddleware,
   validateJson,
   timingSafeEqual,
-} from "@jango-blockchained/hoox-shared/middleware";
+} from "@hoox-sh/hoox-shared/middleware";
 import {
   createRouter,
   type MiddlewareHandler,
-} from "@jango-blockchained/hoox-shared/router";
+} from "@hoox-sh/hoox-shared/router";
 
-import { trackAnalytics } from "@jango-blockchained/hoox-shared/analytics";
-import type { AnalyticsEnv } from "@jango-blockchained/hoox-shared/analytics";
-import { healthCheck } from "@jango-blockchained/hoox-shared/health";
-import { KVKeys } from "@jango-blockchained/hoox-shared/kvKeys";
+import { trackAnalytics } from "@hoox-sh/hoox-shared/analytics";
+import type { AnalyticsEnv } from "@hoox-sh/hoox-shared/analytics";
+import { healthCheck } from "@hoox-sh/hoox-shared/health";
+import { KVKeys } from "@hoox-sh/hoox-shared/kvKeys";
 import {
   authenticatedServiceFetch,
   TRADE_EXECUTE_AUTH_KEY_FIELDS,
   resolveInternalAuthKey,
-} from "@jango-blockchained/hoox-shared/service-bindings";
+} from "@hoox-sh/hoox-shared/service-bindings";
 import { z } from "zod";
 
 const logger = createLogger({ service: "email-worker" });

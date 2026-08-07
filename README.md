@@ -9,7 +9,7 @@
 
 ---
 
-The email-worker converts unstructured textual signals into structured trade payloads. It supports two ingress paths: a **Mailgun webhook** (`POST /webhook`) with HMAC-SHA256 signature verification (`Mailgun-Signature`, `Mailgun-Timestamp`, `Mailgun-Token` validated via `crypto.subtle` against `MAILGUN_API_KEY`), and a **direct JSON POST** (`POST /email-signal`) for internal consumers.
+The email-worker converts unstructured textual signals into structured trade payloads. It supports two ingress paths: a **Mailgun webhook** (`POST /webhook`) with HMAC-SHA256 signature verification (`Mailgun-Signature`, `Mailgun-Timestamp`, `Mailgun-Token` validated via `crypto.subtle` against `MAILGUN_API_KEY`, **timing-safe compare**, and **±15 min timestamp replay window**), and a **direct JSON POST** (`POST /email-signal`) for internal consumers (fail-closed `X-Internal-Auth-Key`).
 
 Both paths feed into `parseEmailSignal`, which attempts JSON deserialization first and falls back to regex-based extraction using configurable patterns from `CONFIG_KV` (`coinPattern`, `actionPattern`, `quantityMultiplier`). Extracted fields — exchange (normalized to `binance`/`mexc`/`bybit`), action (`LONG`/`SHORT`), symbol (uppercase, stripped), quantity, optional price, leverage, and `test` — are validated and forwarded to the [`trade-worker`](https://github.com/hoox-sh/trade-worker) via the `TRADE_SERVICE` service binding with `X-Source: email-worker` origin tagging. JSON bodies may include `"test": true` to request exchange testnet execution when the target exchange supports it.
 

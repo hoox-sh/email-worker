@@ -54,12 +54,22 @@ interface EmailSignal {
 // Normalized to TradeActionSchema values before forwarding.
 const EmailSignalSchema = z
   .object({
-    exchange: z.string(),
+    exchange: z.string().min(1),
     action: z.enum(["buy", "sell", "long", "short", "LONG", "SHORT"]),
-    symbol: z.string(),
-    quantity: z.number().default(100),
-    price: z.number().optional(),
-    leverage: z.number().optional(),
+    symbol: z
+      .string()
+      .min(1)
+      .max(32)
+      .transform((s) => s.toUpperCase().replace(/[^A-Z0-9]/g, ""))
+      .refine((s) => s.length >= 2, { message: "symbol too short" }),
+    quantity: z
+      .number()
+      .finite()
+      .positive()
+      .max(1e12)
+      .default(100),
+    price: z.number().finite().positive().optional(),
+    leverage: z.number().finite().positive().max(125).optional(),
     test: z.boolean().optional(),
   })
   .strip();
@@ -71,6 +81,9 @@ const WebhookPayloadSchema = z.object({
 });
 
 // ── Constants ───────────────────────────────────────────────────────
+
+/** Reject Mailgun signatures older/newer than this window (replay protection). */
+export const MAILGUN_TIMESTAMP_TOLERANCE_SEC = 15 * 60;
 
 // ── Router setup ────────────────────────────────────────────────────
 
@@ -133,23 +146,40 @@ export default {
 
 // ── Handlers ────────────────────────────────────────────────────────
 
-async function handleMailgunWebhook(
-  request: Request,
-  env: Env,
-  ctx: ExecutionContext
-): Promise<Response> {
-  const signature = request.headers.get("Mailgun-Signature");
-  const timestamp = request.headers.get("Mailgun-Timestamp");
-  const token = request.headers.get("Mailgun-Token");
+/**
+ * Verify Mailgun HMAC-SHA256 signature and timestamp freshness.
+ * Fail-closed: missing key, stale/future timestamp, or mismatch → reject.
+ *
+ * @param nowSec - optional clock override for tests
+ */
+export async function verifyMailgunSignature(params: {
+  signature: string;
+  timestamp: string;
+  token: string;
+  apiKey: string;
+  nowSec?: number;
+  toleranceSec?: number;
+}): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const {
+    signature,
+    timestamp,
+    token,
+    apiKey,
+    nowSec = Math.floor(Date.now() / 1000),
+    toleranceSec = MAILGUN_TIMESTAMP_TOLERANCE_SEC,
+  } = params;
 
-  if (!signature || !timestamp || !token) {
-    return Errors.unauthorized("Missing Mailgun signature headers");
+  if (!apiKey) {
+    return { ok: false, reason: "MAILGUN_API_KEY not configured" };
   }
 
-  const apiKey = env.MAILGUN_API_KEY;
-  if (!apiKey) {
-    logger.error("MAILGUN_API_KEY not configured");
-    return Errors.internal("Service configuration error");
+  // Replay protection: reject stale or far-future timestamps
+  const ts = Number(timestamp);
+  if (!Number.isFinite(ts) || !/^\d{1,12}$/.test(timestamp.trim())) {
+    return { ok: false, reason: "Invalid Mailgun timestamp" };
+  }
+  if (Math.abs(nowSec - ts) > toleranceSec) {
+    return { ok: false, reason: "Mailgun timestamp outside allowed window" };
   }
 
   const dataToSign = timestamp + token;
@@ -171,8 +201,43 @@ async function handleMailgunWebhook(
     .join("");
 
   if (!timingSafeEqual(signature, expectedSignature)) {
-    logger.warn("Invalid Mailgun signature");
-    return Errors.unauthorized("Invalid signature");
+    return { ok: false, reason: "Invalid signature" };
+  }
+  return { ok: true };
+}
+
+async function handleMailgunWebhook(
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext
+): Promise<Response> {
+  const signature = request.headers.get("Mailgun-Signature");
+  const timestamp = request.headers.get("Mailgun-Timestamp");
+  const token = request.headers.get("Mailgun-Token");
+
+  if (!signature || !timestamp || !token) {
+    return Errors.unauthorized("Missing Mailgun signature headers");
+  }
+
+  const apiKey = env.MAILGUN_API_KEY;
+  if (!apiKey) {
+    logger.error("MAILGUN_API_KEY not configured");
+    return Errors.internal("Service configuration error");
+  }
+
+  const verified = await verifyMailgunSignature({
+    signature,
+    timestamp,
+    token,
+    apiKey,
+  });
+  if (!verified.ok) {
+    if (verified.reason === "MAILGUN_API_KEY not configured") {
+      logger.error(verified.reason);
+      return Errors.internal("Service configuration error");
+    }
+    logger.warn("Mailgun signature rejected", { reason: verified.reason });
+    return Errors.unauthorized(verified.reason);
   }
 
   try {
@@ -358,13 +423,20 @@ export async function loadSignalPatterns(env: Env): Promise<SignalPatterns> {
     ),
   ]);
 
+  const mult =
+    typeof quantityMultiplier === "number" &&
+    Number.isFinite(quantityMultiplier) &&
+    quantityMultiplier > 0
+      ? quantityMultiplier
+      : 1;
+
   const patterns = {
     coinPattern: compileSafePattern(String(coinPattern), "BTC|ETH|SOL"),
     actionPattern: compileSafePattern(
       String(actionPattern),
       "buy|sell|long|short"
     ),
-    quantityMultiplier: quantityMultiplier ?? 1,
+    quantityMultiplier: mult,
   };
 
   cachedPatterns = {
@@ -380,30 +452,51 @@ export function parseEmailSignal(
   patterns: SignalPatterns,
   signalError?: { set: (resp: Response) => void }
 ): EmailSignal | null {
-  try {
-    const parsed = EmailSignalSchema.safeParse(JSON.parse(body));
-    if (!parsed.success) {
-      if (signalError) {
-        signalError.set(
-          createJsonResponse({ error: "Invalid signal format" }, 400)
-        );
+  // Only attempt structured JSON when the body looks like a JSON object/array.
+  // Avoid treating free text that happens to contain `{` mid-string as JSON.
+  const trimmed = body.trim();
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+    try {
+      const parsed = EmailSignalSchema.safeParse(JSON.parse(trimmed));
+      if (!parsed.success) {
+        if (signalError) {
+          signalError.set(
+            createJsonResponse({ error: "Invalid signal format" }, 400)
+          );
+        }
+        return null;
       }
-      return null;
+      const data = parsed.data;
+      const normalizedExchange = normalizeExchange(data.exchange);
+      if (!normalizedExchange) {
+        if (signalError) {
+          signalError.set(
+            createJsonResponse({ error: "Unsupported exchange" }, 400)
+          );
+        }
+        return null;
+      }
+      const quantity = data.quantity * patterns.quantityMultiplier;
+      if (!Number.isFinite(quantity) || quantity <= 0) {
+        if (signalError) {
+          signalError.set(
+            createJsonResponse({ error: "Invalid quantity" }, 400)
+          );
+        }
+        return null;
+      }
+      return {
+        exchange: normalizedExchange,
+        action: normalizeAction(data.action),
+        symbol: data.symbol,
+        quantity,
+        price: data.price,
+        leverage: data.leverage,
+        test: data.test,
+      };
+    } catch {
+      // Malformed JSON that looked like JSON — fall through to plaintext
     }
-    const data = parsed.data;
-    const normalizedExchange = normalizeExchange(data.exchange);
-    if (!normalizedExchange) return null;
-    return {
-      exchange: normalizedExchange,
-      action: normalizeAction(data.action),
-      symbol: data.symbol.toUpperCase(),
-      quantity: data.quantity * patterns.quantityMultiplier,
-      price: data.price,
-      leverage: data.leverage,
-      test: data.test,
-    };
-  } catch {
-    // Not JSON — fall through to plaintext parsing
   }
   return extractFromPlaintext(body, patterns);
 }
@@ -430,14 +523,33 @@ function extractFromPlaintext(
     ? normalizeAction(actionMatch[0])
     : extractField(lower, ["action", "buy", "sell", "long", "short"]);
 
+  // Optional quantity: "quantity: 1.5" (plain) — default 100 when absent
+  const quantityRaw = extractNumericField(lower, ["quantity", "qty", "size"]);
+  const baseQty =
+    quantityRaw !== null && Number.isFinite(quantityRaw) && quantityRaw > 0
+      ? quantityRaw
+      : 100;
+  const quantity = baseQty * patterns.quantityMultiplier;
+  if (!Number.isFinite(quantity) || quantity <= 0) {
+    return null;
+  }
+
   const normalizedExchange = exchange ? normalizeExchange(exchange) : null;
   const normalizedAction = action ? normalizeAction(action) : null;
-  if (normalizedExchange && normalizedAction && symbol) {
+  const cleanSymbol = symbol
+    ? symbol.toUpperCase().replace(/[^A-Z0-9]/g, "")
+    : "";
+  if (
+    normalizedExchange &&
+    normalizedAction &&
+    cleanSymbol &&
+    cleanSymbol.length >= 2
+  ) {
     return {
       exchange: normalizedExchange,
       action: normalizedAction,
-      symbol: symbol.toUpperCase().replace(/[^A-Z0-9]/g, ""),
-      quantity: 100 * patterns.quantityMultiplier,
+      symbol: cleanSymbol,
+      quantity,
     };
   }
   return null;
@@ -452,6 +564,20 @@ function extractField(body: string, keywords: string[]): string | null {
         .split(/[\n\r,;]/)[0]
         .trim()
         .replace(/[^a-zA-Z0-9]/g, "");
+    }
+  }
+  return null;
+}
+
+/** Extract a numeric field value (preserves decimals; rejects non-finite). */
+function extractNumericField(body: string, keywords: string[]): number | null {
+  for (const kw of keywords) {
+    const idx = body.indexOf(kw + ":");
+    if (idx !== -1) {
+      const after = body.substring(idx + kw.length + 1).trim();
+      const token = after.split(/[\n\r,;\s]/)[0]?.trim() ?? "";
+      const n = parseFloat(token);
+      if (Number.isFinite(n) && n > 0) return n;
     }
   }
   return null;

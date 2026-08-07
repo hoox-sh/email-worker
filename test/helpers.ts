@@ -29,6 +29,11 @@ export async function generateMailgunSignature(
     .join("");
 }
 
+/** Fresh Mailgun timestamp (unix seconds) for signature tests with replay window. */
+export function freshMailgunTimestamp(offsetSec = 0): string {
+  return String(Math.floor(Date.now() / 1000) + offsetSec);
+}
+
 export const mockEnvBase = {
   CONFIG_KV: {
     get: async () => null,

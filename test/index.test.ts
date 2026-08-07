@@ -4,7 +4,7 @@
  */
 
 import { describe, expect, test, vi } from "bun:test";
-import { generateMailgunSignature } from "./helpers";
+import { generateMailgunSignature, freshMailgunTimestamp } from "./helpers";
 import worker from "../src/index";
 
 describe("Email Worker fetch handler", () => {
@@ -28,7 +28,7 @@ describe("Email Worker fetch handler", () => {
 
   test("should handle Mailgun webhook payload", async () => {
     const TEST_KEY = "test-mailgun-key";
-    const timestamp = "1234567890";
+    const timestamp = freshMailgunTimestamp();
     const token = "abc123";
     const signature = await generateMailgunSignature(
       timestamp,
@@ -81,7 +81,7 @@ describe("Email Worker fetch handler", () => {
 
   test("should handle Mailgun webhook with invalid signal", async () => {
     const TEST_KEY = "test-mailgun-key";
-    const timestamp = "1234567891";
+    const timestamp = freshMailgunTimestamp();
     const token = "def456";
     const signature = await generateMailgunSignature(
       timestamp,

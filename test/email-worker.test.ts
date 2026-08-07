@@ -4,7 +4,11 @@
  */
 
 import { describe, expect, test, beforeEach, jest } from "bun:test";
-import { generateMailgunSignature, mockEnvBase } from "./helpers";
+import {
+  generateMailgunSignature,
+  freshMailgunTimestamp,
+  mockEnvBase,
+} from "./helpers";
 
 describe("email-worker", () => {
   test("GET /health returns healthy", async () => {
@@ -104,7 +108,7 @@ describe("email-worker", () => {
         new Response(JSON.stringify({ requestId: "mg-123" }), { status: 200 })
       );
 
-    const timestamp = "1234567890";
+    const timestamp = freshMailgunTimestamp();
     const token = "abc123";
     const signature = await generateMailgunSignature(
       timestamp,
@@ -162,7 +166,7 @@ describe("email-worker", () => {
         new Response(JSON.stringify({ requestId: "mg-456" }), { status: 200 })
       );
 
-    const timestamp = "1234567891";
+    const timestamp = freshMailgunTimestamp();
     const token = "def456";
     const signature = await generateMailgunSignature(
       timestamp,
@@ -833,7 +837,7 @@ describe("Mailgun signature validation", () => {
         "Content-Type": "application/x-www-form-urlencoded",
         "User-Agent": "Mailgun",
         "Mailgun-Signature": "invalidsignature",
-        "Mailgun-Timestamp": "1234567890",
+        "Mailgun-Timestamp": freshMailgunTimestamp(),
         "Mailgun-Token": "abc123",
       },
       body: formData,
@@ -851,8 +855,52 @@ describe("Mailgun signature validation", () => {
     expect(res.status).toBe(401);
   });
 
+  test("returns 401 if Mailgun timestamp is outside replay window", async () => {
+    const timestamp = freshMailgunTimestamp(-60 * 60); // 1 hour ago
+    const token = "stale-token";
+    const signature = await generateMailgunSignature(
+      timestamp,
+      token,
+      mockEnvBase.MAILGUN_API_KEY
+    );
+
+    const worker = (await import("../src/index.ts")).default;
+    const formData = new FormData();
+    formData.append(
+      "body-plain",
+      JSON.stringify({
+        exchange: "binance",
+        action: "buy",
+        symbol: "BTCUSDT",
+      })
+    );
+
+    const req = new Request("https://email-worker.workers.dev/webhook", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": "Mailgun",
+        "Mailgun-Signature": signature,
+        "Mailgun-Timestamp": timestamp,
+        "Mailgun-Token": token,
+      },
+      body: formData,
+    });
+
+    const res = await worker.fetch(
+      req as any,
+      { ...mockEnvBase, TRADE_SERVICE: {} as any } as any,
+      {
+        waitUntil: async (p: Promise<any>) => {
+          await p;
+        },
+      } as any
+    );
+    expect(res.status).toBe(401);
+  });
+
   test("returns 500 if MAILGUN_API_KEY is not configured", async () => {
-    const timestamp = "1234567890";
+    const timestamp = freshMailgunTimestamp();
     const token = "abc123";
     const signature = await generateMailgunSignature(
       timestamp,

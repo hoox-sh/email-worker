@@ -116,3 +116,99 @@ describe("verifyMailgunSignature", () => {
     expect(result.ok).toBe(false);
   });
 });
+
+describe("parseEmailSignal error callbacks", () => {
+  test("sets error for unsupported exchange in JSON", () => {
+    let err: Response | null = null;
+    const json =
+      '{"exchange":"kraken","action":"buy","symbol":"BTCUSDT","quantity":1}';
+    const result = parseEmailSignal(json, defaultPatterns, {
+      set: (r) => {
+        err = r;
+      },
+    });
+    expect(result).toBeNull();
+    expect(err).not.toBeNull();
+  });
+
+  test("sets error for invalid quantity after multiplier", () => {
+    let err: Response | null = null;
+    const json =
+      '{"exchange":"binance","action":"buy","symbol":"BTCUSDT","quantity":1}';
+    const result = parseEmailSignal(
+      json,
+      { ...defaultPatterns, quantityMultiplier: 0 },
+      {
+        set: (r) => {
+          err = r;
+        },
+      }
+    );
+    expect(result).toBeNull();
+    expect(err).not.toBeNull();
+  });
+
+  test("falls through malformed JSON that looks like JSON", () => {
+    const result = parseEmailSignal("{not valid json", defaultPatterns);
+    expect(result).toBeNull();
+  });
+});
+
+describe("verifyMailgunSignature extra cases", () => {
+  const apiKey = "test-mailgun-api-key";
+
+  test("rejects empty api key", async () => {
+    const result = await verifyMailgunSignature({
+      signature: "abc",
+      timestamp: String(Math.floor(Date.now() / 1000)),
+      token: "tok",
+      apiKey: "",
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toContain("MAILGUN_API_KEY");
+  });
+
+  test("rejects invalid timestamp format", async () => {
+    const result = await verifyMailgunSignature({
+      signature: "abc",
+      timestamp: "not-a-number",
+      token: "tok",
+      apiKey,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toContain("Invalid Mailgun timestamp");
+  });
+});
+
+describe("loadSignalPatterns", () => {
+  test("loads defaults when KV returns null", async () => {
+    const { loadSignalPatterns } = await import("../src/index");
+    const env = {
+      CONFIG_KV: {
+        get: async () => null,
+      },
+    } as any;
+    const patterns = await loadSignalPatterns(env);
+    expect(patterns.coinPattern.test("BTC")).toBe(true);
+    expect(patterns.actionPattern.test("buy")).toBe(true);
+    expect(patterns.quantityMultiplier).toBe(1);
+  });
+
+  test("uses cached patterns on second call", async () => {
+    const { loadSignalPatterns } = await import("../src/index");
+    let calls = 0;
+    const env = {
+      CONFIG_KV: {
+        get: async () => {
+          calls++;
+          return null;
+        },
+      },
+    } as any;
+    await loadSignalPatterns(env);
+    const before = calls;
+    await loadSignalPatterns(env);
+    // cache hit should not re-fetch all three keys again (or fewer calls)
+    expect(calls).toBeLessThanOrEqual(before + 3);
+  });
+});

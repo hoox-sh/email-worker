@@ -63,13 +63,18 @@ export async function emailHandler(
       return;
     }
 
+    const mode = signal.test === true ? "test" : "live";
+    const idempotencyKey = `email:${signal.exchange}:${signal.symbol}:${signal.action}:${signal.quantity}:${mode}`;
     const response = await authenticatedServiceFetch(
       env.TRADE_SERVICE,
       env,
       "/webhook",
       signal,
       {
-        headers: { "X-Source": "email-worker" },
+        headers: {
+          "X-Source": "email-worker",
+          "Idempotency-Key": idempotencyKey,
+        },
         internalKeyFields: TRADE_EXECUTE_AUTH_KEY_FIELDS,
       }
     );

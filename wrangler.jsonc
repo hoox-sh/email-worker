@@ -17,7 +17,7 @@
   "compatibility_flags": ["nodejs_compat"],
   "placement": {
     "mode": "smart"
-  }
+  },
   "observability": {
     "enabled": true,
     "head_sampling_rate": 0.1,

@@ -6,6 +6,7 @@
     "types": ["@cloudflare/workers-types"],
     "moduleResolution": "bundler",
     "strict": true,
+    "noUncheckedIndexedAccess": true,
     "skipLibCheck": true,
     "resolveJsonModule": true
   },

@@ -565,10 +565,8 @@ function extractField(body: string, keywords: string[]): string | null {
     const idx = body.indexOf(kw + ":");
     if (idx !== -1) {
       const after = body.substring(idx + kw.length + 1).trim();
-      return after
-        .split(/[\n\r,;]/)[0]
-        .trim()
-        .replace(/[^a-zA-Z0-9]/g, "");
+      const token = after.split(/[\n\r,;]/)[0]?.trim() ?? "";
+      return token.replace(/[^a-zA-Z0-9]/g, "");
     }
   }
   return null;

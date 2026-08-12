@@ -15,6 +15,7 @@ import {
   createInternalAuthMiddleware,
   validateJson,
   timingSafeEqual,
+  safeWaitUntil,
 } from "@hoox-sh/hoox-shared/middleware";
 import {
   createRouter,
@@ -332,7 +333,8 @@ async function processSignal(
 
     if (!response.ok) {
       // Track failed signal forwarding (non-blocking)
-      ctx.waitUntil(
+      safeWaitUntil(
+        ctx,
         trackAnalytics(env, "/track/signal", {
           data: {
             source: "email-worker",
@@ -340,9 +342,8 @@ async function processSignal(
             symbol: signal.symbol,
             confidence: 0.5,
           },
-        }).catch((err) =>
-          logger.error("trackAnalytics failed", { error: String(err) })
-        )
+        }),
+        (err) => logger.error("trackAnalytics failed", { error: String(err) })
       );
 
       return Errors.internal(`Trade worker error: ${response.status}`);
@@ -351,7 +352,8 @@ async function processSignal(
     const result = (await response.json()) as { requestId?: string };
 
     // Track successful signal forwarding (non-blocking)
-    ctx.waitUntil(
+    safeWaitUntil(
+      ctx,
       trackAnalytics(env, "/track/signal", {
         data: {
           source: "email-worker",
@@ -359,9 +361,8 @@ async function processSignal(
           symbol: signal.symbol,
           confidence: 0.5,
         },
-      }).catch((err) =>
-        logger.error("trackAnalytics failed", { error: String(err) })
-      )
+      }),
+      (err) => logger.error("trackAnalytics failed", { error: String(err) })
     );
 
     return createJsonResponse(

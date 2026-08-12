@@ -7,7 +7,10 @@
 // Parses incoming emails for trading signals and forwards them to trade-worker
 
 import PostalMime from "postal-mime";
-import { createLogger } from "@hoox-sh/hoox-shared/middleware";
+import {
+  createLogger,
+  safeWaitUntil,
+} from "@hoox-sh/hoox-shared/middleware";
 import {
   authenticatedServiceFetch,
   TRADE_EXECUTE_AUTH_KEY_FIELDS,
@@ -80,7 +83,8 @@ export async function emailHandler(
     );
 
     // Track analytics (non-blocking)
-    ctx.waitUntil(
+    safeWaitUntil(
+      ctx,
       trackAnalytics(env, "/track/signal", {
         data: {
           source: "email-worker",
@@ -88,9 +92,8 @@ export async function emailHandler(
           symbol: signal.symbol,
           confidence: 0.5,
         },
-      }).catch((err) =>
-        logger.error("trackAnalytics failed", { error: String(err) })
-      )
+      }),
+      (err) => logger.error("trackAnalytics failed", { error: String(err) })
     );
 
     if (response.ok) {

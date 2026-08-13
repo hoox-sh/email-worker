@@ -1,10 +1,10 @@
 {
   "display_name": "Email Worker",
-  "description": "Email signal scanner",
+  "description": "Signal parse patterns (email-worker reads these from CONFIG_KV)",
   "sections": {
     "signal": {
       "title": "Signal Extraction",
-      "description": "Signal parsing settings",
+      "description": "Regex / multiplier applied when parsing inbound email signals",
       "icon": "search",
       "priority": 10,
       "fields": {
@@ -16,9 +16,9 @@
         "quantity_multiplier": [0.5, 0.75, 1, 1.25, 1.5, 2],
       },
       "descriptions": {
-        "coin_pattern": "Regex pattern to identify which assets are eligible for trading from email signals.",
-        "action_pattern": "Regex pattern to extract the trade action direction.",
-        "quantity_multiplier": "Global multiplier applied to any quantities extracted from email signals.",
+        "coin_pattern": "Regex for tradable symbols in the email body.",
+        "action_pattern": "Regex for trade direction tokens.",
+        "quantity_multiplier": "Scale extracted quantities (1 = unchanged).",
       },
     },
   },

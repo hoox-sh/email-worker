@@ -23,7 +23,6 @@ import {
 } from "@hoox-sh/hoox-shared/router";
 
 import { trackAnalytics } from "@hoox-sh/hoox-shared/analytics";
-import type { AnalyticsEnv } from "@hoox-sh/hoox-shared/analytics";
 import { healthCheck } from "@hoox-sh/hoox-shared/health";
 import { KVKeys } from "@hoox-sh/hoox-shared/kvKeys";
 import {
@@ -35,7 +34,7 @@ import { z } from "zod";
 
 const logger = createLogger({ service: "email-worker" });
 
-export interface Env extends Cloudflare.Env, AnalyticsEnv {}
+export interface Env extends Cloudflare.Env {}
 
 interface EmailSignal {
   exchange: string;

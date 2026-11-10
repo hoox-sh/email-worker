@@ -34,7 +34,7 @@ import { z } from "zod";
 
 const logger = createLogger({ service: "email-worker" });
 
-export interface Env extends Cloudflare.Env {}
+export type Env = Cloudflare.Env;
 
 interface EmailSignal {
   exchange: string;
